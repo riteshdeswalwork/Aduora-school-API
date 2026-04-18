@@ -1,0 +1,83 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using sms.api.DTOs;
+using sms.api.Models;
+
+namespace sms.api.Interfaces.Library
+{
+    public interface ILibraryManager
+    {
+        Task<LibraryDashboardDTO> GetLibraryDashboardAsync();
+        Task<IEnumerable<BookCategoryDTO>> GetAllBookCategoriesAsync();
+        Task<BookCategoryDTO?> GetBookCategoryByIdAsync(Guid id);
+        Task<BookCategoryDTO> CreateBookCategoryAsync(CreateBookCategoryDTO createDto, Guid createdByUserId);
+        Task<BookCategoryDTO?> UpdateBookCategoryAsync(Guid id, UpdateBookCategoryDTO updateDto);
+        Task<bool> DeleteBookCategoryAsync(Guid id);
+        Task<IEnumerable<AuthorDTO>> GetAllAuthorsAsync();
+        Task<AuthorDTO?> GetAuthorByIdAsync(Guid id);
+        Task<AuthorDTO> CreateAuthorAsync(CreateAuthorDTO createDto, Guid createdByUserId);
+        Task<AuthorDTO?> UpdateAuthorAsync(Guid id, CreateAuthorDTO updateDto);
+        Task<bool> DeleteAuthorAsync(Guid id);
+        Task<IEnumerable<AuthorDTO>> SearchAuthorsAsync(string searchTerm);
+        Task<IEnumerable<PublisherDTO>> GetAllPublishersAsync();
+        Task<PublisherDTO?> GetPublisherByIdAsync(Guid id);
+        Task<PublisherDTO> CreatePublisherAsync(CreatePublisherDTO createDto, Guid createdByUserId);
+        Task<PublisherDTO?> UpdatePublisherAsync(Guid id, CreatePublisherDTO updateDto);
+        Task<bool> DeletePublisherAsync(Guid id);
+        Task<IEnumerable<PublisherDTO>> SearchPublishersAsync(string searchTerm);
+        Task<IEnumerable<BookDTO>> GetAllBooksAsync();
+        Task<BookDTO?> GetBookByIdAsync(Guid id);
+        Task<BookDTO?> GetBookByISBNAsync(string isbn);
+        Task<BookDTO?> GetBookByAccessionNumberAsync(string accessionNumber);
+        Task<BookDTO> CreateBookAsync(CreateBookDTO createDto, Guid createdByUserId);
+        Task<BookDTO?> UpdateBookAsync(Guid id, CreateBookDTO updateDto);
+        Task<bool> DeleteBookAsync(Guid id);
+        Task<IEnumerable<BookDTO>> SearchBooksAsync(string searchTerm);
+        Task<IEnumerable<BookDTO>> GetBooksByCategoryAsync(Guid categoryId);
+        Task<IEnumerable<BookDTO>> GetBooksByAuthorAsync(Guid authorId);
+        Task<IEnumerable<BookDTO>> GetBooksByPublisherAsync(Guid publisherId);
+        Task<IEnumerable<BookDTO>> GetAvailableBooksAsync();
+        Task<IEnumerable<BookDTO>> GetPopularBooksAsync(int count = 10);
+        Task<IEnumerable<LibraryMemberDTO>> GetAllLibraryMembersAsync();
+        Task<LibraryMemberDTO?> GetLibraryMemberByIdAsync(Guid id);
+        Task<LibraryMemberDTO?> GetLibraryMemberByUserIdAsync(Guid userId);
+        Task<LibraryMemberDTO?> GetLibraryMemberByMembershipNumberAsync(string membershipNumber);
+        Task<LibraryMemberDTO> CreateLibraryMemberAsync(CreateLibraryMemberDTO createDto, Guid createdByUserId);
+        Task<LibraryMemberDTO?> UpdateLibraryMemberAsync(Guid id, CreateLibraryMemberDTO updateDto);
+        Task<bool> DeleteLibraryMemberAsync(Guid id);
+        Task<bool> SuspendLibraryMemberAsync(Guid id, string reason, DateTime? suspensionEndDate = null);
+        Task<bool> ReactivateLibraryMemberAsync(Guid id);
+        Task<IEnumerable<BookIssueDTO>> GetAllBookIssuesAsync();
+        Task<BookIssueDTO?> GetBookIssueByIdAsync(Guid id);
+        Task<IEnumerable<BookIssueDTO>> GetBookIssuesByMemberAsync(Guid memberId);
+        Task<IEnumerable<BookIssueDTO>> GetBookIssuesByBookAsync(Guid bookId);
+        Task<IEnumerable<BookIssueDTO>> GetActiveBookIssuesAsync();
+        Task<IEnumerable<BookIssueDTO>> GetOverdueBookIssuesAsync();
+        Task<BookIssueDTO> IssueBookAsync(CreateBookIssueDTO createDto, Guid issuedByUserId);
+        Task<BookIssueDTO?> ReturnBookAsync(Guid issueId, string? returnCondition = null, string? returnNotes = null, Guid? returnedByUserId = null);
+        Task<BookIssueDTO?> RenewBookAsync(Guid issueId, int? additionalDays = null);
+        Task<bool> ReportLostBookAsync(Guid issueId, string description, decimal? replacementCost = null);
+        Task<bool> ReportDamagedBookAsync(Guid issueId, string description, decimal? repairCost = null);
+        Task<IEnumerable<BookReservationDTO>> GetAllBookReservationsAsync();
+        Task<BookReservationDTO?> GetBookReservationByIdAsync(Guid id);
+        Task<IEnumerable<BookReservationDTO>> GetBookReservationsByMemberAsync(Guid memberId);
+        Task<IEnumerable<BookReservationDTO>> GetBookReservationsByBookAsync(Guid bookId);
+        Task<IEnumerable<BookReservationDTO>> GetActiveBookReservationsAsync();
+        Task<BookReservationDTO> CreateBookReservationAsync(CreateBookReservationDTO createDto, Guid createdByUserId);
+        Task<bool> CancelBookReservationAsync(Guid id, string? reason = null, Guid? cancelledByUserId = null);
+        Task<BookIssueDTO?> FulfillBookReservationAsync(Guid reservationId, Guid fulfilledByUserId);
+        Task<IEnumerable<LibraryFineDTO>> GetAllLibraryFinesAsync();
+        Task<LibraryFineDTO?> GetLibraryFineByIdAsync(Guid id);
+        Task<IEnumerable<LibraryFineDTO>> GetLibraryFinesByMemberAsync(Guid memberId);
+        Task<IEnumerable<LibraryFineDTO>> GetPendingLibraryFinesAsync();
+        Task<bool> PayLibraryFineAsync(Guid fineId, decimal amount, string paymentMethod, string? paymentReference = null, Guid? receivedByUserId = null);
+        Task<bool> WaiveLibraryFineAsync(Guid fineId, string reason, Guid waivedByUserId);
+        Task<bool> CalculateOverdueFinesAsync();
+        Task<bool> CanIssueBookAsync(Guid bookId, Guid memberId);
+        Task<bool> CanReserveBookAsync(Guid bookId, Guid memberId);
+        Task<bool> IsISBNUniqueAsync(string isbn, Guid? excludeBookId = null);
+        Task<bool> IsAccessionNumberUniqueAsync(string accessionNumber, Guid? excludeBookId = null);
+        Task<bool> IsMembershipNumberUniqueAsync(string membershipNumber, Guid? excludeMemberId = null);
+    }
+}

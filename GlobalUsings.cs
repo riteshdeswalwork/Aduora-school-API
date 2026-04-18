@@ -1,0 +1,13 @@
+global using sms.api.Interfaces.Admin;
+global using sms.api.Interfaces.Auth;
+global using sms.api.Interfaces.Academic;
+global using sms.api.Interfaces.Attendance;
+global using sms.api.Interfaces.Bus;
+global using sms.api.Interfaces.Calendar;
+global using sms.api.Interfaces.Document;
+global using sms.api.Interfaces.Fee;
+global using sms.api.Interfaces.Library;
+global using sms.api.Interfaces.Shared;
+global using sms.api.Interfaces.Staff;
+global using sms.api.Interfaces.Student;
+global using sms.api.Controllers.Shared;
