@@ -15,6 +15,11 @@ namespace sms.api.Models
         public DateTime Date { get; set; }
         [Required]
         public bool IsPresent { get; set; }
+
+        [Required]
+        [StringLength(20)]
+        public string Status { get; set; } = "Present"; // Present, Absent, Late
+
         public string Remarks { get; set; } = string.Empty;
         public DateTime? CheckInTime { get; set; }
         public DateTime? CheckOutTime { get; set; }

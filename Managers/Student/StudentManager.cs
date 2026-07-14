@@ -79,12 +79,30 @@ namespace sms.api.Managers.Student
 
             if (academicYearId.HasValue)
             {
+                // Ignore global academic-year header filter so query param controls the list.
                 var enrolledStudentIds = await _context.ClassEnrollments
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
                     .Where(e => e.AcademicYearId == academicYearId.Value && e.IsActive)
                     .Select(e => e.StudentId)
                     .Distinct()
                     .ToListAsync();
-                query = query.Where(s => enrolledStudentIds.Contains(s.Id));
+
+                if (enrolledStudentIds.Count > 0)
+                {
+                    var studentsWithAnyEnrollment = await _context.ClassEnrollments
+                        .IgnoreQueryFilters()
+                        .AsNoTracking()
+                        .Where(e => e.IsActive)
+                        .Select(e => e.StudentId)
+                        .Distinct()
+                        .ToListAsync();
+
+                    // Enrolled in this year, or no enrollment row yet (legacy / import without ClassEnrollment).
+                    query = query.Where(s =>
+                        enrolledStudentIds.Contains(s.Id) ||
+                        !studentsWithAnyEnrollment.Contains(s.Id));
+                }
             }
 
             if (allowedStudentIds != null)

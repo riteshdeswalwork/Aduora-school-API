@@ -34,6 +34,14 @@ namespace sms.api.Models
 
         public DateTime? EffectiveTo { get; set; }
 
+        /// <summary>EveryWeek, MonthlyNth, SingleDate</summary>
+        [StringLength(20)]
+        public string PatternType { get; set; } = "EveryWeek";
+
+        /// <summary>For MonthlyNth: comma-separated week numbers (1-5). 5 = last occurrence of that weekday in the month.</summary>
+        [StringLength(50)]
+        public string WeekOccurrences { get; set; } = string.Empty;
+
         public Guid CreatedByUserId { get; set; }
 
         [ForeignKey("CreatedByUserId")]

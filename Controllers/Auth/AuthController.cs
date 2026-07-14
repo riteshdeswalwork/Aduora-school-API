@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using sms.api.Interfaces;
+using sms.api.Interfaces.Security;
 using sms.api.Services;
 
 namespace sms.api.Controllers.Auth
@@ -11,12 +12,18 @@ namespace sms.api.Controllers.Auth
     {
         private readonly IUserManager _userManager;
         private readonly IRecaptchaService _recaptchaService;
+        private readonly IStaffDataScopeService _scopeService;
         private readonly ILogger<AuthController> _logger;
 
-        public AuthController(IUserManager userManager, IRecaptchaService recaptchaService, ILogger<AuthController> logger)
+        public AuthController(
+            IUserManager userManager,
+            IRecaptchaService recaptchaService,
+            IStaffDataScopeService scopeService,
+            ILogger<AuthController> logger)
         {
             _userManager = userManager;
             _recaptchaService = recaptchaService;
+            _scopeService = scopeService;
             _logger = logger;
         }
 
@@ -44,6 +51,7 @@ namespace sms.api.Controllers.Auth
 
             // Role-based access: permission codes for frontend (nav + page access + buttons)
             var permissions = await _userManager.GetUserPermissionCodesAsync(user.Id);
+            var dataScope = await _scopeService.ResolveAsync(user.Id, null);
 
             // Profile photo as data URL so frontend can show without another API call
             string profilePhoto = null;
@@ -61,6 +69,8 @@ namespace sms.api.Controllers.Auth
                 fullName = user.FullName?.Trim() ?? user.Username,
                 userId = user.Id.ToString(),
                 permissions = permissions,
+                dataScope = dataScope.EffectiveScope.ToString(),
+                allowedClassIds = dataScope.AllowedClassIds,
                 email = user.Email,
                 firstName = user.FirstName,
                 lastName = user.LastName,

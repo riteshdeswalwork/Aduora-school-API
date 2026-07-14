@@ -5835,6 +5835,11 @@ namespace sms.api.Migrations
                     b.Property<Guid>("StaffId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicYearId");

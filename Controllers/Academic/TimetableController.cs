@@ -7,9 +7,8 @@ using System.Security.Claims;
 namespace sms.api.Controllers.Academic
 {
     [Route("api/[controller]")]
-    [ApiController]
     [Authorize]
-    public class TimetableController : ControllerBase
+    public class TimetableController : ApiControllerBase
     {
         private readonly ITimetableManager _timetableManager;
 
@@ -24,7 +23,13 @@ namespace sms.api.Controllers.Academic
         {
             try
             {
+                var scope = await GetDataScopeAsync();
                 var entries = await _timetableManager.GetAllTimetableEntriesAsync(scheduleDate, endDate);
+                if (!scope.IsUnrestricted)
+                {
+                    var allowed = scope.AllowedClassIds?.ToHashSet() ?? new HashSet<Guid>();
+                    entries = entries.Where(e => allowed.Contains(e.ClassId));
+                }
                 return Ok(entries);
             }
             catch (Exception ex)
@@ -46,12 +51,11 @@ namespace sms.api.Controllers.Academic
                     return Unauthorized(new { message = "Invalid user token" });
                 }
 
-                // Role-based access control
-                if (userRole == "Student")
+                if (userRole != "Student")
                 {
-                    // Students can only view their own class timetable
-                    // This would need additional logic to verify the student belongs to the requested class
-                    // For now, we'll allow it but in production you'd want to verify class membership
+                    var scope = await GetDataScopeAsync();
+                    if (!scope.IsUnrestricted && !scope.CanAccessClass(classId))
+                        return Forbid();
                 }
 
                 var entries = await _timetableManager.GetTimetableByClassAsync(classId, dayOfWeek, scheduleDate, endDate);
@@ -69,7 +73,13 @@ namespace sms.api.Controllers.Academic
         {
             try
             {
+                var scope = await GetDataScopeAsync();
                 var entries = await _timetableManager.GetTimetableByTeacherAsync(teacherId, dayOfWeek, scheduleDate, endDate);
+                if (!scope.IsUnrestricted)
+                {
+                    var allowed = scope.AllowedClassIds?.ToHashSet() ?? new HashSet<Guid>();
+                    entries = entries.Where(e => allowed.Contains(e.ClassId));
+                }
                 return Ok(entries);
             }
             catch (Exception ex)
@@ -88,6 +98,14 @@ namespace sms.api.Controllers.Academic
                 {
                     return NotFound(new { message = "Timetable entry not found" });
                 }
+
+                if (!User.IsInRole("Student"))
+                {
+                    var scope = await GetDataScopeAsync();
+                    if (!scope.IsUnrestricted && !scope.CanAccessClass(entry.ClassId))
+                        return Forbid();
+                }
+
                 return Ok(entry);
             }
             catch (Exception ex)
@@ -264,6 +282,13 @@ namespace sms.api.Controllers.Academic
         {
             try
             {
+                if (!User.IsInRole("Student"))
+                {
+                    var scope = await GetDataScopeAsync();
+                    if (!scope.IsUnrestricted && !scope.CanAccessClass(classId))
+                        return Forbid();
+                }
+
                 var timetable = await _timetableManager.GetClassTimetableAsync(classId);
                 return Ok(timetable);
             }

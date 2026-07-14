@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using sms.api.Data;
-using sms.api.Interfaces.Calendar;
+using sms.api.Helpers;
 using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
 using sms.api.Models;
@@ -102,8 +102,10 @@ namespace sms.api.Managers.Calendar
             {
                 Id = Guid.NewGuid(),
                 Name = createWeekOffDto.Name,
-                Description = createWeekOffDto.Description,
+                Description = createWeekOffDto.Description ?? string.Empty,
                 DayOfWeek = createWeekOffDto.DayOfWeek,
+                PatternType = string.IsNullOrWhiteSpace(createWeekOffDto.PatternType) ? "EveryWeek" : createWeekOffDto.PatternType.Trim(),
+                WeekOccurrences = createWeekOffDto.WeekOccurrences ?? string.Empty,
                 IsSchoolWide = createWeekOffDto.IsSchoolWide,
                 ClassIds = createWeekOffDto.ClassIds != null && createWeekOffDto.ClassIds.Any()
                     ? JsonSerializer.Serialize(createWeekOffDto.ClassIds)
@@ -128,12 +130,18 @@ namespace sms.api.Managers.Calendar
 
             if (!string.IsNullOrEmpty(updateWeekOffDto.Name))
                 weekOff.Name = updateWeekOffDto.Name;
-           
-            if (!string.IsNullOrEmpty(updateWeekOffDto.Description))
+
+            if (updateWeekOffDto.Description != null)
                 weekOff.Description = updateWeekOffDto.Description;
-           
+
             if (updateWeekOffDto.DayOfWeek.HasValue)
                 weekOff.DayOfWeek = updateWeekOffDto.DayOfWeek.Value;
+
+            if (!string.IsNullOrWhiteSpace(updateWeekOffDto.PatternType))
+                weekOff.PatternType = updateWeekOffDto.PatternType.Trim();
+
+            if (updateWeekOffDto.WeekOccurrences != null)
+                weekOff.WeekOccurrences = updateWeekOffDto.WeekOccurrences;
            
             if (updateWeekOffDto.IsSchoolWide.HasValue)
                 weekOff.IsSchoolWide = updateWeekOffDto.IsSchoolWide.Value;
@@ -151,6 +159,8 @@ namespace sms.api.Managers.Calendar
            
             if (updateWeekOffDto.EffectiveTo.HasValue)
                 weekOff.EffectiveTo = updateWeekOffDto.EffectiveTo.Value;
+            else if (updateWeekOffDto.EffectiveTo == null && updateWeekOffDto.EffectiveFrom.HasValue)
+                weekOff.EffectiveTo = null;
 
             weekOff.UpdatedAt = DateTime.UtcNow;
 
@@ -199,13 +209,7 @@ namespace sms.api.Managers.Calendar
 
         public async Task<bool> IsWeekOffAsync(DateTime date, Guid? userId = null)
         {
-            var dayOfWeek = (int)date.DayOfWeek;
-           
-            var query = _context.WeekOffs
-                .Where(w => w.IsActive &&
-                           w.DayOfWeek == dayOfWeek &&
-                           w.EffectiveFrom <= date &&
-                           (w.EffectiveTo == null || w.EffectiveTo >= date));
+            var query = _context.WeekOffs.Where(w => w.IsActive);
 
             if (userId.HasValue)
             {
@@ -220,6 +224,9 @@ namespace sms.api.Managers.Calendar
                    
                     foreach (var weekOff in weekOffs)
                     {
+                        var dto = MapToDTO(weekOff);
+                        if (!WeekOffPatternHelper.MatchesDate(date, dto)) continue;
+
                         if (weekOff.IsSchoolWide) return true;
                        
                         if (!string.IsNullOrEmpty(weekOff.ClassIds))
@@ -252,7 +259,8 @@ namespace sms.api.Managers.Calendar
             }
             else
             {
-                return await query.Where(w => w.IsSchoolWide).AnyAsync();
+                var weekOffs = await query.Where(w => w.IsSchoolWide).ToListAsync();
+                return weekOffs.Any(w => WeekOffPatternHelper.MatchesDate(date, MapToDTO(w)));
             }
 
             return false;
@@ -277,6 +285,8 @@ namespace sms.api.Managers.Calendar
                 IsActive = weekOff.IsActive,
                 EffectiveFrom = weekOff.EffectiveFrom,
                 EffectiveTo = weekOff.EffectiveTo,
+                PatternType = weekOff.PatternType,
+                WeekOccurrences = weekOff.WeekOccurrences,
                 CreatedByName = weekOff.CreatedBy?.FullName ?? "Unknown",
                 CreatedAt = weekOff.CreatedAt,
                 UpdatedAt = weekOff.UpdatedAt

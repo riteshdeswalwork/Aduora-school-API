@@ -208,6 +208,43 @@ namespace sms.api.DTOs
         public string? Remarks { get; set; }
     }
 
+    public class UpdateBusMaintenanceDTO
+    {
+        [Required]
+        public Guid BusId { get; set; }
+
+        [Required]
+        [StringLength(100)]
+        public string MaintenanceType { get; set; } = string.Empty;
+
+        [Required]
+        public DateTime MaintenanceDate { get; set; }
+
+        [StringLength(500)]
+        public string? Description { get; set; }
+
+        [Required]
+        [Range(0, 1000000)]
+        public decimal Cost { get; set; }
+
+        [StringLength(100)]
+        public string? ServiceProvider { get; set; }
+
+        [StringLength(15)]
+        public string? ServiceProviderPhone { get; set; }
+
+        public int? Odometer { get; set; }
+        public DateTime? NextServiceDate { get; set; }
+
+        [StringLength(500)]
+        public string? PartsReplaced { get; set; }
+
+        [StringLength(500)]
+        public string? Remarks { get; set; }
+
+        public bool IsCompleted { get; set; } = true;
+    }
+
     public class BusExpenseDTO
     {
         public Guid Id { get; set; }

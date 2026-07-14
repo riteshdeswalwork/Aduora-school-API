@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using sms.api.Interfaces.Security;
 using sms.api.Middleware;
+using sms.api.Models.Security;
 using System;
 using System.Security.Claims;
 
@@ -27,6 +30,12 @@ namespace sms.api.Controllers.Shared
                 return userId;
             }
             throw new UnauthorizedAccessException("User ID not found in claims");
+        }
+
+        protected async Task<StaffScopeContext> GetDataScopeAsync()
+        {
+            var scopeService = HttpContext.RequestServices.GetRequiredService<IStaffDataScopeService>();
+            return await scopeService.ResolveAsync(GetCurrentUserId(), GetCurrentAcademicYearId());
         }
     }
 }

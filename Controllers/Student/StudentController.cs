@@ -46,50 +46,18 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetAll()
         {
+            var scope = await GetDataScopeAsync();
             IEnumerable<Models.Student> studentList;
 
-            // If user is Admin, return all students
-            if (User.IsInRole("Admin"))
+            if (scope.IsUnrestricted)
             {
                 studentList = await _studentManager.GetAllAsync();
             }
-            // If user is Staff, return only students in their assigned classes
-            else if (User.IsInRole("Staff"))
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim))
-                    return Forbid();
-
-                var userId = Guid.Parse(userIdClaim);
-
-                // Get Staff ID from User ID
-                var staff = await _staffManager.GetByUserIdAsync(userId);
-                if (staff == null)
-                    return NotFound(new { message = "Staff record not found for this user" });
-
-                var staffId = staff.Id;
-
-                // Get classes assigned to this staff
-                var staffClasses = await _classManager.GetClassesByStaffIdAsync(staffId);
-
-                // Get all students enrolled in these classes
-                var allStudents = await _studentManager.GetAllAsync();
-                var studentIds = new HashSet<Guid>();
-
-                foreach (var classItem in staffClasses)
-                {
-                    var enrollments = await _classEnrollmentManager.GetEnrollmentsByClassIdAsync(classItem.Id);
-                    foreach (var enrollment in enrollments)
-                    {
-                        studentIds.Add(enrollment.StudentId);
-                    }
-                }
-
-                studentList = allStudents.Where(s => studentIds.Contains(s.Id)).ToList();
-            }
             else
             {
-                return Forbid();
+                var allowedStudentIds = scope.AllowedStudentIds?.ToHashSet() ?? new HashSet<Guid>();
+                var allStudents = await _studentManager.GetAllAsync();
+                studentList = allStudents.Where(s => allowedStudentIds.Contains(s.Id)).ToList();
             }
 
             // Map to simplified DTO for list display
@@ -116,42 +84,22 @@ namespace sms.api.Controllers.Student
             if (pageNumber < 1) pageNumber = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 20;
 
+            var scope = await GetDataScopeAsync();
             IEnumerable<Models.Student> studentList;
             int totalCount;
 
-            if (User.IsInRole("Admin"))
+            if (scope.IsUnrestricted)
             {
                 var (items, count) = await _studentManager.GetPagedAsync(pageNumber, pageSize, searchTerm, academicYearId);
                 studentList = items;
                 totalCount = count;
             }
-            else if (User.IsInRole("Staff"))
+            else
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim))
-                    return Forbid();
-
-                var userId = Guid.Parse(userIdClaim);
-                var staff = await _staffManager.GetByUserIdAsync(userId);
-                if (staff == null)
-                    return NotFound(new { message = "Staff record not found for this user" });
-
-                var staffClasses = await _classManager.GetClassesByStaffIdAsync(staff.Id);
-                var studentIds = new HashSet<Guid>();
-                foreach (var classItem in staffClasses)
-                {
-                    var enrollments = await _classEnrollmentManager.GetEnrollmentsByClassIdAsync(classItem.Id);
-                    foreach (var enrollment in enrollments)
-                        studentIds.Add(enrollment.StudentId);
-                }
-
+                var studentIds = scope.AllowedStudentIds?.ToHashSet() ?? new HashSet<Guid>();
                 var (items, count) = await _studentManager.GetPagedAsync(pageNumber, pageSize, searchTerm, academicYearId, studentIds);
                 studentList = items;
                 totalCount = count;
-            }
-            else
-            {
-                return Forbid();
             }
 
             var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
@@ -306,47 +254,16 @@ namespace sms.api.Controllers.Student
                     return NotFound();
                 }
 
-            // If user is Admin, allow access to any student
-            if (User.IsInRole("Admin"))
-            {
-                // Continue with normal flow
-            }
-            // If user is Staff, only allow access to students in their assigned classes
-            else if (User.IsInRole("Staff"))
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim))
-                    return Forbid();
-
-                var userId = Guid.Parse(userIdClaim);
-
-                // Get Staff ID from User ID
-                var staff = await _staffManager.GetByUserIdAsync(userId);
-                if (staff == null)
-                    return NotFound(new { message = "Staff record not found for this user" });
-
-                var staffId = staff.Id;
-
-                // Get classes assigned to this staff
-                var staffClasses = await _classManager.GetClassesByStaffIdAsync(staffId);
-                var classIds = staffClasses.Select(c => c.Id).ToList();
-
-                // Check if student is enrolled in any of these classes
-                var studentEnrollments = await _classEnrollmentManager.GetEnrollmentsByStudentIdAsync(id);
-                var isStudentInStaffClass = studentEnrollments.Any(e => classIds.Contains(e.ClassId));
-
-                if (!isStudentInStaffClass)
-                    return Forbid();
-            }
-            // If user is Student, only allow access to own profile
-            else if (User.IsInRole("Student"))
+            if (User.IsInRole("Student"))
             {
                 if (id.ToString() != User.FindFirst(ClaimTypes.NameIdentifier)?.Value)
                     return Forbid();
             }
             else
             {
-                return Forbid();
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted && !scope.CanAccessStudent(id))
+                    return Forbid();
             }
 
             // Get student's enrolled subjects first - simplified approach

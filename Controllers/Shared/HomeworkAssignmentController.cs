@@ -25,8 +25,17 @@ namespace sms.api.Controllers.Shared
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
             if (!yearId.HasValue) return BadRequest(new { message = "Academic year not selected" });
 
+            var scope = await GetDataScopeAsync();
             var query = _context.HomeworkAssignments.AsNoTracking().Where(x => x.AcademicYearId == yearId.Value);
             if (!includeInactive) query = query.Where(x => x.IsActive);
+
+            var allowedClassIds = DataScopeHelper.AllowedClassIdsForQuery(scope);
+            if (allowedClassIds != null)
+            {
+                var allowed = allowedClassIds.ToList();
+                query = query.Where(x => x.ClassId.HasValue && allowed.Contains(x.ClassId.Value));
+            }
+
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var term = searchTerm.Trim().ToLower();
@@ -45,8 +54,17 @@ namespace sms.api.Controllers.Shared
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
             if (!yearId.HasValue) return BadRequest(new { message = "Academic year not selected" });
 
+            var scope = await GetDataScopeAsync();
             var query = _context.HomeworkAssignments.AsNoTracking().Where(x => x.AcademicYearId == yearId.Value);
             if (!includeInactive) query = query.Where(x => x.IsActive);
+
+            var allowedClassIds = DataScopeHelper.AllowedClassIdsForQuery(scope);
+            if (allowedClassIds != null)
+            {
+                var allowed = allowedClassIds.ToList();
+                query = query.Where(x => x.ClassId.HasValue && allowed.Contains(x.ClassId.Value));
+            }
+
             if (!string.IsNullOrWhiteSpace(tab))
             {
                 if (string.Equals(tab, "Active", StringComparison.OrdinalIgnoreCase))
@@ -72,13 +90,30 @@ namespace sms.api.Controllers.Shared
         public async Task<IActionResult> GetById(Guid id)
         {
             var entity = await _context.HomeworkAssignments.FindAsync(id);
-            return entity == null ? NotFound(new { message = "Homework assignment not found" }) : Ok(entity);
+            if (entity == null) return NotFound(new { message = "Homework assignment not found" });
+
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted)
+            {
+                if (!entity.ClassId.HasValue || !scope.CanAccessClass(entity.ClassId.Value))
+                    return Forbid();
+            }
+
+            return Ok(entity);
         }
 
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] HomeworkAssignment entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted)
+            {
+                if (!entity.ClassId.HasValue || !scope.CanAccessClass(entity.ClassId.Value))
+                    return Forbid();
+            }
+
             entity.Id = Guid.NewGuid();
             if (entity.AcademicYearId == default)
             {
@@ -99,6 +134,16 @@ namespace sms.api.Controllers.Shared
             if (!ModelState.IsValid) return BadRequest(ModelState);
             var existing = await _context.HomeworkAssignments.FindAsync(id);
             if (existing == null) return NotFound(new { message = "Homework assignment not found" });
+
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted)
+            {
+                if (!existing.ClassId.HasValue || !scope.CanAccessClass(existing.ClassId.Value))
+                    return Forbid();
+                if (entity.ClassId.HasValue && !scope.CanAccessClass(entity.ClassId.Value))
+                    return Forbid();
+            }
+
             entity.Id = id;
             entity.CreatedAt = existing.CreatedAt;
             entity.UpdatedAt = DateTime.UtcNow;
@@ -112,6 +157,14 @@ namespace sms.api.Controllers.Shared
         {
             var existing = await _context.HomeworkAssignments.FindAsync(id);
             if (existing == null) return NotFound(new { message = "Homework assignment not found" });
+
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted)
+            {
+                if (!existing.ClassId.HasValue || !scope.CanAccessClass(existing.ClassId.Value))
+                    return Forbid();
+            }
+
             existing.IsActive = false;
             existing.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();

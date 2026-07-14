@@ -37,6 +37,15 @@ namespace sms.api.Interfaces.Student
 
         Task<IReadOnlyList<FeeDefaulterRowDto>> GetFeeDefaultersAsync(Guid academicYearId, Guid? classId, int? minDaysOverdue);
 
+        Task<PagedResult<StudentFee>> GetStudentFeesPagedAsync(
+            int pageNumber,
+            int pageSize,
+            string? searchTerm,
+            Guid? classId,
+            string? status,
+            Guid? academicYearId,
+            IEnumerable<Guid>? allowedClassIds = null);
+
         Task RecalculateStudentFeeOutstandingAsync(Guid studentFeeId);
     }
 }

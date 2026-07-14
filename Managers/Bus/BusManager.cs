@@ -207,6 +207,40 @@ namespace sms.api.Managers.Bus
             return records.Select(MapMaintenanceToDTO);
         }
 
+        public async Task<IEnumerable<BusMaintenanceDTO>> GetAllMaintenanceRecordsAsync(Guid? busId = null, string? searchTerm = null, string? maintenanceType = null)
+        {
+            var query = _context.BusMaintenanceRecords
+                .Include(bmr => bmr.Bus)
+                .Include(bmr => bmr.CreatedBy)
+                .AsQueryable();
+
+            if (busId.HasValue) query = query.Where(bmr => bmr.BusId == busId.Value);
+            if (!string.IsNullOrWhiteSpace(maintenanceType)) query = query.Where(bmr => bmr.MaintenanceType == maintenanceType);
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim().ToLower();
+                query = query.Where(bmr =>
+                    (bmr.Bus != null && bmr.Bus.BusNumber.ToLower().Contains(term)) ||
+                    (bmr.MaintenanceType != null && bmr.MaintenanceType.ToLower().Contains(term)) ||
+                    (bmr.Description != null && bmr.Description.ToLower().Contains(term)) ||
+                    (bmr.ServiceProvider != null && bmr.ServiceProvider.ToLower().Contains(term)) ||
+                    (bmr.PartsReplaced != null && bmr.PartsReplaced.ToLower().Contains(term)) ||
+                    (bmr.Remarks != null && bmr.Remarks.ToLower().Contains(term)));
+            }
+
+            var records = await query.OrderByDescending(bmr => bmr.MaintenanceDate).Take(500).ToListAsync();
+            return records.Select(MapMaintenanceToDTO);
+        }
+
+        public async Task<BusMaintenanceDTO?> GetMaintenanceRecordByIdAsync(Guid id)
+        {
+            var record = await _context.BusMaintenanceRecords
+                .Include(bmr => bmr.Bus)
+                .Include(bmr => bmr.CreatedBy)
+                .FirstOrDefaultAsync(bmr => bmr.Id == id);
+            return record == null ? null : MapMaintenanceToDTO(record);
+        }
+
         public async Task<BusMaintenanceDTO> CreateMaintenanceRecordAsync(CreateBusMaintenanceDTO createDto, Guid createdByUserId)
         {
             var maintenance = new BusMaintenanceRecord
@@ -247,6 +281,52 @@ namespace sms.api.Managers.Bus
                 .FirstAsync(bmr => bmr.Id == maintenance.Id);
 
             return MapMaintenanceToDTO(record);
+        }
+
+        public async Task<BusMaintenanceDTO?> UpdateMaintenanceRecordAsync(Guid id, UpdateBusMaintenanceDTO updateDto, Guid updatedByUserId)
+        {
+            var maintenance = await _context.BusMaintenanceRecords.FindAsync(id);
+            if (maintenance == null) return null;
+
+            maintenance.BusId = updateDto.BusId;
+            maintenance.MaintenanceType = updateDto.MaintenanceType;
+            maintenance.MaintenanceDate = updateDto.MaintenanceDate;
+            maintenance.Description = updateDto.Description;
+            maintenance.Cost = updateDto.Cost;
+            maintenance.ServiceProvider = updateDto.ServiceProvider;
+            maintenance.ServiceProviderPhone = updateDto.ServiceProviderPhone;
+            maintenance.Odometer = updateDto.Odometer;
+            maintenance.NextServiceDate = updateDto.NextServiceDate;
+            maintenance.PartsReplaced = updateDto.PartsReplaced;
+            maintenance.Remarks = updateDto.Remarks;
+            maintenance.IsCompleted = updateDto.IsCompleted;
+            maintenance.UpdatedByUserId = updatedByUserId;
+            maintenance.UpdatedAt = DateTime.UtcNow;
+
+            var bus = await _dbSet.FindAsync(updateDto.BusId);
+            if (bus != null)
+            {
+                bus.LastMaintenanceDate = updateDto.MaintenanceDate;
+                if (updateDto.NextServiceDate.HasValue)
+                    bus.NextMaintenanceDate = updateDto.NextServiceDate.Value;
+            }
+
+            await _context.SaveChangesAsync();
+
+            var record = await _context.BusMaintenanceRecords
+                .Include(bmr => bmr.Bus)
+                .Include(bmr => bmr.CreatedBy)
+                .FirstAsync(bmr => bmr.Id == id);
+            return MapMaintenanceToDTO(record);
+        }
+
+        public async Task<bool> DeleteMaintenanceRecordAsync(Guid id)
+        {
+            var maintenance = await _context.BusMaintenanceRecords.FindAsync(id);
+            if (maintenance == null) return false;
+            _context.BusMaintenanceRecords.Remove(maintenance);
+            await _context.SaveChangesAsync();
+            return true;
         }
 
         public async Task<IEnumerable<BusDTO>> GetBusesDueForMaintenanceAsync()

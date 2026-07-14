@@ -228,6 +228,7 @@ namespace sms.api.Managers.Admin
                         Id = Guid.NewGuid(),
                         Name = def.Name,
                         Description = def.Description,
+                        DataScope = def.DataScope,
                         IsActive = true,
                         IsSystemRole = true
                     };
@@ -240,6 +241,11 @@ namespace sms.api.Managers.Admin
                     if (role.Description != def.Description)
                     {
                         role.Description = def.Description;
+                        metaChanged = true;
+                    }
+                    if (role.DataScope != def.DataScope)
+                    {
+                        role.DataScope = def.DataScope;
                         metaChanged = true;
                     }
                     if (!role.IsSystemRole)
@@ -279,6 +285,7 @@ namespace sms.api.Managers.Admin
                         Id = Guid.NewGuid(),
                         Name = "Staff",
                         Description = staffDescCreate,
+                        DataScope = DataScopeType.AssignedClasses,
                         IsActive = true,
                         IsSystemRole = true
                     };
@@ -292,10 +299,11 @@ namespace sms.api.Managers.Admin
                     .ToListAsync();
                 await SyncRolePermissionsToSetAsync(staffRole.Id, teacherPermIds);
                 const string staffDesc = "Teaching portal access (aligned with Teacher; legacy Staff name).";
-                if (!staffRole.IsSystemRole || staffRole.Description != staffDesc)
+                if (!staffRole.IsSystemRole || staffRole.Description != staffDesc || staffRole.DataScope != DataScopeType.AssignedClasses)
                 {
                     staffRole.IsSystemRole = true;
                     staffRole.Description = staffDesc;
+                    staffRole.DataScope = DataScopeType.AssignedClasses;
                     staffRole.UpdatedAt = DateTime.UtcNow;
                 }
                 await _context.SaveChangesAsync();
@@ -339,6 +347,21 @@ namespace sms.api.Managers.Admin
                         set.Add(p.Id);
                     else if (p.Code.StartsWith(page + ".", StringComparison.Ordinal) &&
                              p.Code.EndsWith(".view", StringComparison.OrdinalIgnoreCase))
+                        set.Add(p.Id);
+                }
+            }
+
+            foreach (var spec in def.TabAccessSpecs)
+            {
+                var tabPrefix = $"{spec.PageCode}.tab.{spec.TabKey.ToLowerInvariant()}.";
+                foreach (var p in permissions)
+                {
+                    if (string.Equals(p.Code, spec.PageCode, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(p.Code, spec.PageCode + ".view", StringComparison.OrdinalIgnoreCase))
+                        set.Add(p.Id);
+                    else if (!p.Code.StartsWith(tabPrefix, StringComparison.Ordinal))
+                        continue;
+                    else if (spec.FullAccess || p.Code.EndsWith(".view", StringComparison.OrdinalIgnoreCase))
                         set.Add(p.Id);
                 }
             }

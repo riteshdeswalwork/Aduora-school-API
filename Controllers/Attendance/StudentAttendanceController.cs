@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Linq;
-using System;
 using sms.api.Controllers.Shared;
 using sms.api.Data;
 using sms.api.Models;
@@ -23,7 +21,7 @@ namespace sms.api.Controllers.Attendance
         public class StudentCheckDto
         {
             public Guid StudentId { get; set; }
-            public Guid SubjectId { get; set; } // CourseId
+            public Guid SubjectId { get; set; }
             public DateTime Date { get; set; }
             public DateTime? Time { get; set; }
         }
@@ -31,9 +29,18 @@ namespace sms.api.Controllers.Attendance
         [HttpGet]
         public async Task<IActionResult> Get([FromQuery] DateTime? date, [FromQuery] Guid? subjectId)
         {
+            var scope = await GetDataScopeAsync();
             var q = _context.Attendances.AsNoTracking();
             if (date.HasValue) q = q.Where(a => a.Date.Date == date.Value.Date);
             if (subjectId.HasValue && subjectId.Value != Guid.Empty) q = q.Where(a => a.CourseId == subjectId.Value);
+
+            if (!scope.IsUnrestricted)
+            {
+                var allowed = scope.AllowedStudentIds ?? Array.Empty<Guid>();
+                if (allowed.Count == 0) return Ok(Array.Empty<AttendanceEntity>());
+                q = q.Where(a => allowed.Contains(a.StudentId));
+            }
+
             var list = await q.OrderBy(a => a.Date).ThenBy(a => a.StudentId).ToListAsync();
             return Ok(list);
         }
@@ -57,6 +64,10 @@ namespace sms.api.Controllers.Attendance
         [HttpPost("checkin")]
         public async Task<IActionResult> CheckIn([FromBody] StudentCheckDto dto)
         {
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessStudent(dto.StudentId))
+                return Forbid();
+
             var yearId = await ResolveAcademicYearId();
             if (yearId == null || yearId == Guid.Empty)
                 return BadRequest(new { message = "Academic year not set" });
@@ -92,6 +103,10 @@ namespace sms.api.Controllers.Attendance
         [HttpPost("checkout")]
         public async Task<IActionResult> CheckOut([FromBody] StudentCheckDto dto)
         {
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessStudent(dto.StudentId))
+                return Forbid();
+
             var now = dto.Time ?? DateTime.UtcNow;
             var existing = await _context.Attendances.FirstOrDefaultAsync(a =>
                 a.StudentId == dto.StudentId && a.CourseId == dto.SubjectId && a.Date.Date == dto.Date.Date);

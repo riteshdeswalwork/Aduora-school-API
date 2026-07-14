@@ -340,6 +340,11 @@ namespace sms.api.Controllers.Staff
                 {
                     existingStaff.User.ProfilePicture = staffDto.ProfilePicture;
                 }
+
+                if (!string.IsNullOrWhiteSpace(staffDto.Password))
+                {
+                    existingStaff.User.PasswordHash = staffDto.Password.Trim();
+                }
             }
 
             try

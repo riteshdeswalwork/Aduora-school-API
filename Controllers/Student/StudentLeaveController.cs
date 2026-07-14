@@ -14,12 +14,10 @@ namespace sms.api.Controllers.Student
     public class StudentLeaveController : ApiControllerBase
     {
         private readonly IStudentLeaveManager _studentLeaveManager;
-        private readonly IClassManager _classManager;
 
-        public StudentLeaveController(IStudentLeaveManager studentLeaveManager, IClassManager classManager)
+        public StudentLeaveController(IStudentLeaveManager studentLeaveManager)
         {
             _studentLeaveManager = studentLeaveManager;
-            _classManager = classManager;
         }
 
         [HttpGet]
@@ -38,29 +36,20 @@ namespace sms.api.Controllers.Student
             if (leave == null)
                 return NotFound();
 
-            // If student, only allow access to own leaves
             if (User.IsInRole("Student"))
             {
                 var studentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(studentIdClaim) || leave.StudentId.ToString() != studentIdClaim)
                     return Forbid();
             }
-            // If staff, only allow access to leaves from their classes
-            else if (User.IsInRole("Staff"))
+            else
             {
-                var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(staffIdClaim))
-                    return Forbid();
-
-                var staffId = Guid.Parse(staffIdClaim);
-                var classId = leave.ClassId;
-
-                if (!classId.HasValue)
-                    return Forbid();
-
-                var classInfo = await _classManager.GetClassByIdAsync(classId.Value);
-                if (classInfo == null || classInfo.TeacherId != staffId)
-                    return Forbid();
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted)
+                {
+                    if (!leave.ClassId.HasValue || !scope.CanAccessClass(leave.ClassId.Value))
+                        return Forbid();
+                }
             }
 
             return Ok(MapToResponseDTO(leave));
@@ -69,11 +58,16 @@ namespace sms.api.Controllers.Student
         [HttpGet("student/{studentId}")]
         public async Task<IActionResult> GetByStudent(Guid studentId)
         {
-            // If student, only allow access to own leaves
             if (User.IsInRole("Student"))
             {
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userIdClaim) || studentId.ToString() != userIdClaim)
+                    return Forbid();
+            }
+            else
+            {
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted && !scope.CanAccessStudent(studentId))
                     return Forbid();
             }
 
@@ -86,19 +80,9 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetByClass(Guid classId)
         {
-            // If staff, only allow access to their assigned classes
-            if (User.IsInRole("Staff"))
-            {
-                var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(staffIdClaim))
-                    return Forbid();
-
-                var staffId = Guid.Parse(staffIdClaim);
-                var classInfo = await _classManager.GetClassByIdAsync(classId);
-                
-                if (classInfo == null || classInfo.TeacherId != staffId)
-                    return Forbid();
-            }
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(classId))
+                return Forbid();
 
             var leaves = await _studentLeaveManager.GetLeavesByClassIdAsync(classId);
             var mappedLeaves = leaves.Select(MapToResponseDTO);
@@ -109,12 +93,17 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Staff")]
         public async Task<IActionResult> GetPendingLeavesForTeacher()
         {
-            var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(staffIdClaim))
+            var scope = await GetDataScopeAsync();
+            if (!scope.StaffId.HasValue)
                 return Forbid();
 
-            var staffId = Guid.Parse(staffIdClaim);
-            var leaves = await _studentLeaveManager.GetPendingLeavesForTeacherAsync(staffId);
+            var leaves = await _studentLeaveManager.GetPendingLeavesForTeacherAsync(scope.StaffId.Value);
+            if (!scope.IsUnrestricted)
+            {
+                var allowed = scope.AllowedClassIds?.ToHashSet() ?? new HashSet<Guid>();
+                leaves = leaves.Where(l => l.ClassId.HasValue && allowed.Contains(l.ClassId.Value));
+            }
+
             var mappedLeaves = leaves.Select(MapToResponseDTO);
             return Ok(mappedLeaves);
         }
@@ -126,7 +115,6 @@ namespace sms.api.Controllers.Student
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            // Ensure the student is only creating a leave for themselves
             var studentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(studentIdClaim) || leaveDto.StudentId.ToString() != studentIdClaim)
                 return Forbid();
@@ -145,15 +133,12 @@ namespace sms.api.Controllers.Student
 
             var approverId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
 
-            // If staff, check if they are the teacher of the student's class
-            if (User.IsInRole("Staff"))
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted)
             {
-                var classId = leave.ClassId;
-                if (!classId.HasValue)
+                if (!leave.ClassId.HasValue)
                     return BadRequest(new { message = "Leave is not associated with a class" });
-
-                var classInfo = await _classManager.GetClassByIdAsync(classId.Value);
-                if (classInfo == null || classInfo.TeacherId != approverId)
+                if (!scope.CanAccessClass(leave.ClassId.Value))
                     return Forbid();
             }
 
@@ -174,15 +159,12 @@ namespace sms.api.Controllers.Student
 
             var approverId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
 
-            // If staff, check if they are the teacher of the student's class
-            if (User.IsInRole("Staff"))
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted)
             {
-                var classId = leave.ClassId;
-                if (!classId.HasValue)
+                if (!leave.ClassId.HasValue)
                     return BadRequest(new { message = "Leave is not associated with a class" });
-
-                var classInfo = await _classManager.GetClassByIdAsync(classId.Value);
-                if (classInfo == null || classInfo.TeacherId != approverId)
+                if (!scope.CanAccessClass(leave.ClassId.Value))
                     return Forbid();
             }
 

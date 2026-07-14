@@ -62,6 +62,7 @@ namespace sms.api.Constants
                 new List<(string, string[])>
                 {
                     ("management", PageActionPermissions.StandardActions),
+                    ("add-results", new[] { PageActionPermissions.View, PageActionPermissions.Add }),
                     ("results", new[] { PageActionPermissions.View })
                 }
             },
@@ -93,7 +94,8 @@ namespace sms.api.Constants
                 new List<(string, string[])>
                 {
                     ("incidents", PageActionPermissions.StandardActions),
-                    ("reports", new[] { PageActionPermissions.View })
+                    ("resolved", PageActionPermissions.StandardActions),
+                    ("conduct-rules", new[] { PageActionPermissions.View })
                 }
             },
             {
@@ -149,7 +151,9 @@ namespace sms.api.Constants
                 PagePermissions.LectureTopics,
                 new List<(string, string[])>
                 {
-                    ("topics", PageActionPermissions.StandardActions)
+                    ("topics", PageActionPermissions.StandardActions),
+                    ("planned", PageActionPermissions.StandardActions),
+                    ("covered", PageActionPermissions.StandardActions)
                 }
             },
             {
@@ -172,7 +176,7 @@ namespace sms.api.Constants
                 PagePermissions.PtmFeedback,
                 new List<(string, string[])>
                 {
-                    ("feedback", new[] { PageActionPermissions.View }),
+                    ("feedback", PageActionPermissions.StandardActions),
                     ("reports", new[] { PageActionPermissions.View })
                 }
             },
@@ -253,7 +257,7 @@ namespace sms.api.Constants
                 PagePermissions.OnlinePayments,
                 new List<(string, string[])>
                 {
-                    ("transactions", new[] { PageActionPermissions.View })
+                    ("transactions", PageActionPermissions.StandardActions)
                 }
             },
             {

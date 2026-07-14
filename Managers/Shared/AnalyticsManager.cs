@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.Interfaces.Shared;
-using sms.api.Managers.Shared;
 using sms.api.Models.DTOs;
 
 namespace sms.api.Managers.Shared
@@ -16,25 +15,41 @@ namespace sms.api.Managers.Shared
             _context = context;
         }
 
-        public async Task<DashboardAnalyticsDTO> GetDashboardAnalyticsAsync()
+        public async Task<DashboardAnalyticsDTO> GetDashboardAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null)
         {
             var analytics = new DashboardAnalyticsDTO
             {
-                Students = await GetStudentAnalyticsAsync(),
+                Students = await GetStudentAnalyticsAsync(allowedClassIds),
                 Staff = await GetStaffAnalyticsAsync(),
-                Attendance = await GetAttendanceAnalyticsAsync(),
-                Fees = await GetFeeAnalyticsAsync(),
-                Exams = await GetExamAnalyticsAsync(),
-                Classes = await GetClassAnalyticsAsync(),
+                Attendance = await GetAttendanceAnalyticsAsync(allowedClassIds),
+                Fees = await GetFeeAnalyticsAsync(allowedClassIds),
+                Exams = await GetExamAnalyticsAsync(allowedClassIds),
+                Classes = await GetClassAnalyticsAsync(allowedClassIds),
                 Departments = await GetDepartmentAnalyticsAsync()
             };
 
             return analytics;
         }
 
-        public async Task<StudentAnalyticsDTO> GetStudentAnalyticsAsync()
+        public async Task<StudentAnalyticsDTO> GetStudentAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null)
         {
-            var students = await _context.Students.Include(s => s.User).ToListAsync();
+            var allowed = allowedClassIds?.ToHashSet();
+            HashSet<Guid>? allowedStudentIds = null;
+            if (allowed != null)
+            {
+                allowedStudentIds = (await _context.ClassEnrollments
+                    .AsNoTracking()
+                    .Where(ce => allowed.Contains(ce.ClassId))
+                    .Select(ce => ce.StudentId)
+                    .Distinct()
+                    .ToListAsync()).ToHashSet();
+            }
+
+            var studentsQuery = _context.Students.Include(s => s.User).AsQueryable();
+            if (allowedStudentIds != null)
+                studentsQuery = studentsQuery.Where(s => allowedStudentIds.Contains(s.Id));
+
+            var students = await studentsQuery.ToListAsync();
             var currentMonth = DateTime.Now.Month;
             var currentYear = DateTime.Now.Year;
 
@@ -46,9 +61,13 @@ namespace sms.api.Managers.Shared
                 NewAdmissionsThisMonth = students.Count(s => s.AdmissionDate.Month == currentMonth && s.AdmissionDate.Year == currentYear)
             };
 
-            // Class-wise distribution
-            var classWiseData = await _context.ClassEnrollments
+            var classWiseQuery = _context.ClassEnrollments
                 .Include(ce => ce.Class)
+                .AsQueryable();
+            if (allowed != null)
+                classWiseQuery = classWiseQuery.Where(ce => allowed.Contains(ce.ClassId));
+
+            var classWiseData = await classWiseQuery
                 .GroupBy(ce => ce.Class.Name)
                 .Select(g => new ClassWiseStudentCountDTO
                 {
@@ -59,7 +78,6 @@ namespace sms.api.Managers.Shared
                 .ToListAsync();
             analytics.ClassWiseDistribution = classWiseData;
 
-            // Gender distribution
             var genderData = students
                 .GroupBy(s => s.Gender)
                 .Select(g => new GenderWiseCountDTO
@@ -71,7 +89,6 @@ namespace sms.api.Managers.Shared
                 .ToList();
             analytics.GenderDistribution = genderData;
 
-            // Monthly admissions (last 12 months)
             var monthlyAdmissions = new List<MonthlyAdmissionDTO>();
             for (int i = 11; i >= 0; i--)
             {
@@ -107,7 +124,6 @@ namespace sms.api.Managers.Shared
                 NewJoiningThisMonth = staff.Count(s => s.DateOfJoining.Month == currentMonth && s.DateOfJoining.Year == currentYear)
             };
 
-            // Department-wise distribution (through designation)
             var departmentData = staff
                 .Where(s => s.Designation?.Department != null)
                 .GroupBy(s => s.Designation!.Department!.Name)
@@ -120,7 +136,6 @@ namespace sms.api.Managers.Shared
                 .ToList();
             analytics.DepartmentWiseDistribution = departmentData;
 
-            // Designation-wise distribution
             var designationData = staff
                 .Where(s => s.Designation != null)
                 .GroupBy(s => s.Designation!.Name)
@@ -133,7 +148,6 @@ namespace sms.api.Managers.Shared
                 .ToList();
             analytics.DesignationDistribution = designationData;
 
-            // Salary distribution
             var salaryRanges = new[]
             {
                 new { Range = "Below 30K", Min = 0m, Max = 30000m },
@@ -154,27 +168,30 @@ namespace sms.api.Managers.Shared
             return analytics;
         }
 
-        public async Task<AttendanceAnalyticsDTO> GetAttendanceAnalyticsAsync()
+        public async Task<AttendanceAnalyticsDTO> GetAttendanceAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null)
         {
             var analytics = new AttendanceAnalyticsDTO();
+            var allowed = allowedClassIds?.ToHashSet();
 
-            // Get recent attendance data (last 30 days)
             var thirtyDaysAgo = DateTime.Now.AddDays(-30);
-            var attendanceRecords = await _context.ClassAttendanceRecords
+            var attendanceQuery = _context.ClassAttendanceRecords
                 .Include(ar => ar.ClassAttendance)
-                .Where(ar => ar.ClassAttendance.Date >= thirtyDaysAgo)
-                .ToListAsync();
+                .Where(ar => ar.ClassAttendance.Date >= thirtyDaysAgo);
+
+            if (allowed != null)
+                attendanceQuery = attendanceQuery.Where(ar => allowed.Contains(ar.ClassAttendance.ClassId));
+
+            var attendanceRecords = await attendanceQuery.ToListAsync();
 
             if (attendanceRecords.Any())
             {
                 var totalRecords = attendanceRecords.Count;
                 var presentRecords = attendanceRecords.Count(ar => ar.IsPresent);
                 analytics.OverallAttendancePercentage = Math.Round((double)presentRecords / totalRecords * 100, 2);
-                analytics.StudentAttendancePercentage = analytics.OverallAttendancePercentage; // Simplified
-                analytics.StaffAttendancePercentage = 85.5; // Mock data for staff
+                analytics.StudentAttendancePercentage = analytics.OverallAttendancePercentage;
+                analytics.StaffAttendancePercentage = 85.5;
             }
 
-            // Weekly attendance (last 7 days)
             var weeklyData = new List<DailyAttendanceDTO>();
             for (int i = 6; i >= 0; i--)
             {
@@ -194,12 +211,18 @@ namespace sms.api.Managers.Shared
             return analytics;
         }
 
-        public async Task<FeeAnalyticsDTO> GetFeeAnalyticsAsync()
+        public async Task<FeeAnalyticsDTO> GetFeeAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null)
         {
-            var studentFees = await _context.StudentFees
+            var allowed = allowedClassIds?.ToHashSet();
+            var feesQuery = _context.StudentFees
                 .AsNoTracking()
                 .Include(sf => sf.FeeStructure)
-                .ToListAsync();
+                .AsQueryable();
+
+            if (allowed != null)
+                feesQuery = feesQuery.Where(sf => sf.FeeStructure != null && allowed.Contains(sf.FeeStructure.ClassId));
+
+            var studentFees = await feesQuery.ToListAsync();
 
             var analytics = new FeeAnalyticsDTO();
 
@@ -207,10 +230,13 @@ namespace sms.api.Managers.Shared
             {
                 analytics.TotalFeeAmount = studentFees.Sum(sf => sf.TotalAmount);
                 analytics.TotalFeePending = studentFees.Sum(sf => sf.OutstandingAmount);
+
+                var feeIds = studentFees.Select(sf => sf.Id).ToHashSet();
                 analytics.TotalFeeCollected = await _context.FeePayments
                     .AsNoTracking()
-                    .Where(p => !p.IsVoided)
-                    .SumAsync(p => p.Amount);
+                    .Where(p => !p.IsVoided && feeIds.Contains(p.StudentFeeId))
+                    .SumAsync(p => (decimal?)p.Amount) ?? 0;
+
                 analytics.CollectionPercentage = analytics.TotalFeeAmount > 0
                     ? (double)Math.Round(100m * analytics.TotalFeeCollected / analytics.TotalFeeAmount, 2)
                     : 0;
@@ -222,10 +248,23 @@ namespace sms.api.Managers.Shared
                 var date = DateTime.UtcNow.AddMonths(-i);
                 var y = date.Year;
                 var mo = date.Month;
-                var collected = await _context.FeePayments
-                    .AsNoTracking()
-                    .Where(p => !p.IsVoided && p.PaymentDate.Year == y && p.PaymentDate.Month == mo)
-                    .SumAsync(p => p.Amount);
+
+                decimal collected;
+                if (allowed != null)
+                {
+                    var feeIds = studentFees.Select(sf => sf.Id).ToHashSet();
+                    collected = await _context.FeePayments
+                        .AsNoTracking()
+                        .Where(p => !p.IsVoided && feeIds.Contains(p.StudentFeeId) && p.PaymentDate.Year == y && p.PaymentDate.Month == mo)
+                        .SumAsync(p => (decimal?)p.Amount) ?? 0;
+                }
+                else
+                {
+                    collected = await _context.FeePayments
+                        .AsNoTracking()
+                        .Where(p => !p.IsVoided && p.PaymentDate.Year == y && p.PaymentDate.Month == mo)
+                        .SumAsync(p => (decimal?)p.Amount) ?? 0;
+                }
 
                 var inMonth = studentFees.Where(sf =>
                     (sf.BillingPeriodYear == y && sf.BillingPeriodMonth == mo)
@@ -246,12 +285,33 @@ namespace sms.api.Managers.Shared
             return analytics;
         }
 
-        public async Task<ExamAnalyticsDTO> GetExamAnalyticsAsync()
+        public async Task<ExamAnalyticsDTO> GetExamAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null)
         {
-            var exams = await _context.Exams
+            var allowed = allowedClassIds?.ToHashSet();
+            var examsQuery = _context.Exams
                 .Include(e => e.ExamResults)
                 .Include(e => e.Subject)
-                .ToListAsync();
+                .AsQueryable();
+
+            // Exams may not have ClassId; filter results by enrolled students when scoped
+            var exams = await examsQuery.ToListAsync();
+
+            if (allowed != null)
+            {
+                var allowedStudentIds = (await _context.ClassEnrollments
+                    .AsNoTracking()
+                    .Where(ce => allowed.Contains(ce.ClassId))
+                    .Select(ce => ce.StudentId)
+                    .Distinct()
+                    .ToListAsync()).ToHashSet();
+
+                foreach (var exam in exams)
+                {
+                    exam.ExamResults = exam.ExamResults
+                        .Where(r => allowedStudentIds.Contains(r.StudentId))
+                        .ToList();
+                }
+            }
 
             var analytics = new ExamAnalyticsDTO
             {
@@ -266,7 +326,6 @@ namespace sms.api.Managers.Shared
                 analytics.AverageScore = Math.Round(allResults.Average(r => r.MarksObtained), 2);
             }
 
-            // Subject-wise performance
             var subjectPerformance = exams
                 .Where(e => e.ExamResults.Any())
                 .GroupBy(e => e.Subject.Name)
@@ -282,9 +341,14 @@ namespace sms.api.Managers.Shared
             return analytics;
         }
 
-        public async Task<ClassAnalyticsDTO> GetClassAnalyticsAsync()
+        public async Task<ClassAnalyticsDTO> GetClassAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null)
         {
-            var classes = await _context.Classes.Include(c => c.Enrollments).ToListAsync();
+            var allowed = allowedClassIds?.ToHashSet();
+            var classesQuery = _context.Classes.Include(c => c.Enrollments).AsQueryable();
+            if (allowed != null)
+                classesQuery = classesQuery.Where(c => allowed.Contains(c.Id));
+
+            var classes = await classesQuery.ToListAsync();
 
             var analytics = new ClassAnalyticsDTO
             {

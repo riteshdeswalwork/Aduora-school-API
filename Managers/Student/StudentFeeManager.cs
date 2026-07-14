@@ -8,6 +8,7 @@ using sms.api.DTOs;
 using sms.api.Interfaces.Student;
 using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
+using sms.api.Utils;
 using sms.api.Models;
 
 namespace sms.api.Managers.Student
@@ -175,6 +176,66 @@ namespace sms.api.Managers.Student
                 .Where(sf => sf.Status == status)
                 .OrderByDescending(sf => sf.DueDate)
                 .ToListAsync();
+        }
+
+        public async Task<PagedResult<StudentFee>> GetStudentFeesPagedAsync(
+            int pageNumber,
+            int pageSize,
+            string? searchTerm,
+            Guid? classId,
+            string? status,
+            Guid? academicYearId,
+            IEnumerable<Guid>? allowedClassIds = null)
+        {
+            var query = _dbSet
+                .Include(sf => sf.Student)
+                    .ThenInclude(s => s.User)
+                .Include(sf => sf.FeeStructure)
+                    .ThenInclude(fs => fs.Class)
+                .Include(sf => sf.Payments)
+                .Include(sf => sf.Discounts)
+                .AsQueryable();
+
+            if (academicYearId.HasValue && academicYearId.Value != Guid.Empty)
+                query = query.Where(sf => sf.AcademicYearId == academicYearId.Value);
+
+            if (classId.HasValue && classId.Value != Guid.Empty)
+                query = query.Where(sf => sf.FeeStructure.ClassId == classId.Value);
+
+            if (allowedClassIds != null)
+            {
+                var classSet = allowedClassIds.ToList();
+                if (classSet.Count > 0)
+                    query = query.Where(sf => classSet.Contains(sf.FeeStructure.ClassId));
+                else
+                    query = query.Where(_ => false);
+            }
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                if (string.Equals(status, "Overdue", StringComparison.OrdinalIgnoreCase))
+                {
+                    var today = DateTime.UtcNow.Date;
+                    query = query.Where(sf => sf.OutstandingAmount > 0 && sf.DueDate.Date < today);
+                }
+                else
+                {
+                    query = query.Where(sf => sf.Status == status);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim();
+                query = query.Where(sf =>
+                    (sf.Student.User.FirstName + " " + sf.Student.User.LastName).Contains(term) ||
+                    sf.Student.RollNumber.Contains(term) ||
+                    (sf.Student.RegistrationNumber != null && sf.Student.RegistrationNumber.Contains(term)) ||
+                    (sf.Student.User.Email != null && sf.Student.User.Email.Contains(term)));
+            }
+
+            query = query.OrderByDescending(sf => sf.DueDate).ThenBy(sf => sf.Student.User.LastName);
+            return await query.ToPagedResultAsync(pageNumber, pageSize);
         }
 
         public async Task<GenerateMonthlyDemandsResultDto> GenerateMissingMonthlyDemandsAsync(Guid academicYearId, int year, int month)

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +22,13 @@ namespace sms.api.Controllers.Academic
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetAll()
         {
+            var scope = await GetDataScopeAsync();
             var enrollments = await _classEnrollmentManager.GetAllAsync();
+            if (!scope.IsUnrestricted)
+            {
+                var allowed = scope.AllowedClassIds?.ToHashSet() ?? new HashSet<Guid>();
+                enrollments = enrollments.Where(e => allowed.Contains(e.ClassId));
+            }
             return Ok(enrollments);
         }
 
@@ -32,9 +39,15 @@ namespace sms.api.Controllers.Academic
             if (enrollment == null)
                 return NotFound();
 
-            // If student, only allow access to own enrollments
             if (User.IsInRole("Student") && enrollment.StudentId.ToString() != User.FindFirst("nameid")?.Value)
                 return Forbid();
+
+            if (!User.IsInRole("Student"))
+            {
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted && !scope.CanAccessClass(enrollment.ClassId))
+                    return Forbid();
+            }
 
             return Ok(enrollment);
         }
@@ -43,6 +56,10 @@ namespace sms.api.Controllers.Academic
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetByClass(Guid classId)
         {
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(classId))
+                return Forbid();
+
             var enrollments = await _classEnrollmentManager.GetEnrollmentsByClassIdAsync(classId);
             return Ok(enrollments);
         }
@@ -50,9 +67,15 @@ namespace sms.api.Controllers.Academic
         [HttpGet("student/{studentId}")]
         public async Task<IActionResult> GetByStudent(Guid studentId)
         {
-            // If student, only allow access to own enrollments
             if (User.IsInRole("Student") && studentId.ToString() != User.FindFirst("nameid")?.Value)
                 return Forbid();
+
+            if (!User.IsInRole("Student"))
+            {
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted && !scope.CanAccessStudent(studentId))
+                    return Forbid();
+            }
 
             var enrollments = await _classEnrollmentManager.GetEnrollmentsByStudentIdAsync(studentId);
             return Ok(enrollments);
@@ -65,6 +88,10 @@ namespace sms.api.Controllers.Academic
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(enrollment.ClassId))
+                return Forbid();
+
             enrollment.Id = Guid.NewGuid();
             var createdEnrollment = await _classEnrollmentManager.CreateAsync(enrollment);
             return CreatedAtAction(nameof(GetById), new { id = createdEnrollment.Id }, createdEnrollment);
@@ -74,6 +101,14 @@ namespace sms.api.Controllers.Academic
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateEnrollmentStatusRequest request)
         {
+            var existing = await _classEnrollmentManager.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound();
+
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(existing.ClassId))
+                return Forbid();
+
             var result = await _classEnrollmentManager.UpdateClassEnrollmentAsync(id, request.IsActive);
             if (!result)
                 return NotFound();

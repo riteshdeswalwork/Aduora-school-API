@@ -24,7 +24,7 @@ namespace sms.api.Controllers.Fee
 
         [HttpGet]
         [Authorize(Roles = "Admin,Staff")]
-        public async Task<IActionResult> GetAll([FromQuery] Guid? academicYearId = null, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
+        public async Task<IActionResult> GetAll([FromQuery] Guid? academicYearId = null, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] string? settlementStatus = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
             if (!yearId.HasValue) return BadRequest(new { message = "Academic year not selected" });
@@ -32,14 +32,18 @@ namespace sms.api.Controllers.Fee
             var query = _context.OnlinePaymentTransactions.AsNoTracking().Where(x => x.AcademicYearId == yearId.Value);
             if (!includeInactive) query = query.Where(x => x.IsActive);
             if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status == status);
+            query = ApplySettlementStatusFilter(query, settlementStatus);
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var term = searchTerm.Trim().ToLower();
                 query = query.Where(x =>
                     (x.TransactionReference != null && x.TransactionReference.ToLower().Contains(term)) ||
                     (x.ReceiptNumber != null && x.ReceiptNumber.ToLower().Contains(term)) ||
+                    (x.MerchantRefId != null && x.MerchantRefId.ToLower().Contains(term)) ||
                     (x.Gateway != null && x.Gateway.ToLower().Contains(term)) ||
                     (x.PaymentFor != null && x.PaymentFor.ToLower().Contains(term)) ||
+                    (x.LedgerCategory != null && x.LedgerCategory.ToLower().Contains(term)) ||
+                    (x.SettlementStatus != null && x.SettlementStatus.ToLower().Contains(term)) ||
                     (x.Status != null && x.Status.ToLower().Contains(term)));
             }
             var items = await query.OrderByDescending(x => x.CreatedAt).Take(500).ToListAsync();
@@ -48,7 +52,7 @@ namespace sms.api.Controllers.Fee
 
         [HttpGet("paged")]
         [Authorize(Roles = "Admin,Staff")]
-        public async Task<IActionResult> GetPaged([FromQuery] Guid? academicYearId = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
+        public async Task<IActionResult> GetPaged([FromQuery] Guid? academicYearId = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] string? settlementStatus = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
             if (!yearId.HasValue) return BadRequest(new { message = "Academic year not selected" });
@@ -56,14 +60,18 @@ namespace sms.api.Controllers.Fee
             var query = _context.OnlinePaymentTransactions.AsNoTracking().Where(x => x.AcademicYearId == yearId.Value);
             if (!includeInactive) query = query.Where(x => x.IsActive);
             if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status == status);
+            query = ApplySettlementStatusFilter(query, settlementStatus);
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 var term = searchTerm.Trim().ToLower();
                 query = query.Where(x =>
                     (x.TransactionReference != null && x.TransactionReference.ToLower().Contains(term)) ||
                     (x.ReceiptNumber != null && x.ReceiptNumber.ToLower().Contains(term)) ||
+                    (x.MerchantRefId != null && x.MerchantRefId.ToLower().Contains(term)) ||
                     (x.Gateway != null && x.Gateway.ToLower().Contains(term)) ||
                     (x.PaymentFor != null && x.PaymentFor.ToLower().Contains(term)) ||
+                    (x.LedgerCategory != null && x.LedgerCategory.ToLower().Contains(term)) ||
+                    (x.SettlementStatus != null && x.SettlementStatus.ToLower().Contains(term)) ||
                     (x.Status != null && x.Status.ToLower().Contains(term)));
             }
             query = query.OrderByDescending(x => x.CreatedAt);
@@ -121,6 +129,14 @@ namespace sms.api.Controllers.Fee
             existing.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
             return Ok(new { message = "Deactivated" });
+        }
+
+        private static IQueryable<OnlinePaymentTransaction> ApplySettlementStatusFilter(IQueryable<OnlinePaymentTransaction> query, string? settlementStatus)
+        {
+            if (string.IsNullOrWhiteSpace(settlementStatus)) return query;
+            if (settlementStatus.Equals("NotSettled", StringComparison.OrdinalIgnoreCase))
+                return query.Where(x => x.SettlementStatus != "Settled");
+            return query.Where(x => x.SettlementStatus == settlementStatus);
         }
     }
 }

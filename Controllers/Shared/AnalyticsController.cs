@@ -4,14 +4,14 @@ using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.Interfaces;
 using sms.api.Interfaces.Shared;
-using sms.api.Managers;
+using sms.api.Utils;
 
 namespace sms.api.Controllers.Shared
 {
     [ApiController]
     [Route("api/analytics")]
     [Authorize]
-    public class AnalyticsController : ControllerBase
+    public class AnalyticsController : ApiControllerBase
     {
         private readonly IAnalyticsManager _analyticsManager;
         private readonly ApplicationDbContext _context;
@@ -24,6 +24,12 @@ namespace sms.api.Controllers.Shared
             _trafficMetrics = trafficMetrics;
         }
 
+        private async Task<IEnumerable<Guid>?> GetAllowedClassIdsForAnalyticsAsync()
+        {
+            var scope = await GetDataScopeAsync();
+            return DataScopeHelper.AllowedClassIdsForQuery(scope);
+        }
+
         /// <summary>
         /// Get comprehensive dashboard analytics
         /// </summary>
@@ -33,7 +39,8 @@ namespace sms.api.Controllers.Shared
         {
             try
             {
-                var analytics = await _analyticsManager.GetDashboardAnalyticsAsync();
+                var allowed = await GetAllowedClassIdsForAnalyticsAsync();
+                var analytics = await _analyticsManager.GetDashboardAnalyticsAsync(allowed);
                 return Ok(analytics);
             }
             catch (Exception ex)
@@ -51,7 +58,8 @@ namespace sms.api.Controllers.Shared
         {
             try
             {
-                var analytics = await _analyticsManager.GetStudentAnalyticsAsync();
+                var allowed = await GetAllowedClassIdsForAnalyticsAsync();
+                var analytics = await _analyticsManager.GetStudentAnalyticsAsync(allowed);
                 return Ok(analytics);
             }
             catch (Exception ex)
@@ -87,7 +95,8 @@ namespace sms.api.Controllers.Shared
         {
             try
             {
-                var analytics = await _analyticsManager.GetAttendanceAnalyticsAsync();
+                var allowed = await GetAllowedClassIdsForAnalyticsAsync();
+                var analytics = await _analyticsManager.GetAttendanceAnalyticsAsync(allowed);
                 return Ok(analytics);
             }
             catch (Exception ex)
@@ -105,7 +114,8 @@ namespace sms.api.Controllers.Shared
         {
             try
             {
-                var analytics = await _analyticsManager.GetFeeAnalyticsAsync();
+                var allowed = await GetAllowedClassIdsForAnalyticsAsync();
+                var analytics = await _analyticsManager.GetFeeAnalyticsAsync(allowed);
                 return Ok(analytics);
             }
             catch (Exception ex)
@@ -123,7 +133,8 @@ namespace sms.api.Controllers.Shared
         {
             try
             {
-                var analytics = await _analyticsManager.GetExamAnalyticsAsync();
+                var allowed = await GetAllowedClassIdsForAnalyticsAsync();
+                var analytics = await _analyticsManager.GetExamAnalyticsAsync(allowed);
                 return Ok(analytics);
             }
             catch (Exception ex)
@@ -141,7 +152,8 @@ namespace sms.api.Controllers.Shared
         {
             try
             {
-                var analytics = await _analyticsManager.GetClassAnalyticsAsync();
+                var allowed = await GetAllowedClassIdsForAnalyticsAsync();
+                var analytics = await _analyticsManager.GetClassAnalyticsAsync(allowed);
                 return Ok(analytics);
             }
             catch (Exception ex)
@@ -177,7 +189,8 @@ namespace sms.api.Controllers.Shared
         {
             try
             {
-                var analytics = await _analyticsManager.GetDashboardAnalyticsAsync();
+                var allowed = await GetAllowedClassIdsForAnalyticsAsync();
+                var analytics = await _analyticsManager.GetDashboardAnalyticsAsync(allowed);
 
                 var quickStats = new
                 {
@@ -208,7 +221,8 @@ namespace sms.api.Controllers.Shared
         {
             try
             {
-                var analytics = await _analyticsManager.GetDashboardAnalyticsAsync();
+                var allowed = await GetAllowedClassIdsForAnalyticsAsync();
+                var analytics = await _analyticsManager.GetDashboardAnalyticsAsync(allowed);
 
                 var summary = new
                 {

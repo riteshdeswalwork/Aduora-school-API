@@ -124,7 +124,7 @@ namespace sms.api.Managers.Calendar
             {
                 Id = Guid.NewGuid(),
                 Title = createEventDto.Title,
-                Description = createEventDto.Description,
+                Description = createEventDto.Description ?? string.Empty,
                 StartDate = createEventDto.StartDate,
                 EndDate = createEventDto.EndDate,
                 Location = createEventDto.Location,
@@ -155,7 +155,7 @@ namespace sms.api.Managers.Calendar
             if (!string.IsNullOrEmpty(updateEventDto.Title))
                 eventItem.Title = updateEventDto.Title;
            
-            if (!string.IsNullOrEmpty(updateEventDto.Description))
+            if (updateEventDto.Description != null)
                 eventItem.Description = updateEventDto.Description;
            
             if (updateEventDto.StartDate.HasValue)

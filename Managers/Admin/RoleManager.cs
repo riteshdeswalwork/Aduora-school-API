@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using sms.api.Constants;
 using sms.api.Data;
 using sms.api.Interfaces.Admin;
 using sms.api.Models;
@@ -78,6 +79,7 @@ namespace sms.api.Managers.Admin
             existing.Name = role.Name;
             existing.Description = role.Description;
             existing.IsActive = role.IsActive;
+            existing.DataScope = role.DataScope;
             existing.UpdatedAt = DateTime.UtcNow;
             existing.UpdatedByUserId = updatedByUserId;
             await _context.SaveChangesAsync();

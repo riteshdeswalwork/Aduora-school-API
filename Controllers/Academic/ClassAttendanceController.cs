@@ -43,21 +43,7 @@ namespace sms.api.Controllers.Academic
             if (attendance == null)
                 return NotFound();
 
-            // If staff, only allow access to their assigned classes
-            if (User.IsInRole("Staff"))
-            {
-                var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(staffIdClaim))
-                    return Forbid();
-
-                var staffId = Guid.Parse(staffIdClaim);
-                var classInfo = await _classManager.GetClassByIdAsync(attendance.ClassId);
-
-                if (classInfo == null || classInfo.TeacherId != staffId)
-                    return Forbid();
-            }
-            // If student, only allow access to their own class attendance
-            else if (User.IsInRole("Student"))
+            if (User.IsInRole("Student"))
             {
                 var studentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(studentIdClaim))
@@ -65,12 +51,10 @@ namespace sms.api.Controllers.Academic
 
                 var studentId = Guid.Parse(studentIdClaim);
 
-                // Check if student is enrolled in this class
                 var enrollment = await _classEnrollmentManager.GetEnrollmentByStudentAndClassAsync(studentId, attendance.ClassId);
                 if (enrollment == null)
                     return Forbid();
 
-                // Filter attendance records to only show the student's own record
                 var filteredAttendance = MapToResponseDTO(attendance);
                 filteredAttendance.AttendanceRecords = filteredAttendance.AttendanceRecords
                     .Where(ar => ar.StudentId == studentId)
@@ -79,27 +63,17 @@ namespace sms.api.Controllers.Academic
                 return Ok(filteredAttendance);
             }
 
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(attendance.ClassId))
+                return Forbid();
+
             return Ok(MapToResponseDTO(attendance));
         }
 
         [HttpGet("class/{classId}")]
         public async Task<IActionResult> GetByClass(Guid classId, [FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate)
         {
-            // If staff, only allow access to their assigned classes
-            if (User.IsInRole("Staff"))
-            {
-                var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(staffIdClaim))
-                    return Forbid();
-
-                var staffId = Guid.Parse(staffIdClaim);
-                var classInfo = await _classManager.GetClassByIdAsync(classId);
-
-                if (classInfo == null || classInfo.TeacherId != staffId)
-                    return Forbid();
-            }
-            // If student, only allow access to their own class attendance
-            else if (User.IsInRole("Student"))
+            if (User.IsInRole("Student"))
             {
                 var studentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(studentIdClaim))
@@ -107,16 +81,20 @@ namespace sms.api.Controllers.Academic
 
                 var studentId = Guid.Parse(studentIdClaim);
 
-                // Check if student is enrolled in this class
                 var enrollment = await _classEnrollmentManager.GetEnrollmentByStudentAndClassAsync(studentId, classId);
                 if (enrollment == null)
+                    return Forbid();
+            }
+            else
+            {
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted && !scope.CanAccessClass(classId))
                     return Forbid();
             }
 
             var attendances = await _classAttendanceManager.GetClassAttendancesByClassIdAsync(classId, fromDate, toDate);
             var mappedAttendances = attendances.Select(MapToResponseDTO);
 
-            // If student, filter attendance records to only show their own
             if (User.IsInRole("Student"))
             {
                 var studentId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
@@ -136,8 +114,17 @@ namespace sms.api.Controllers.Academic
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetByTeacher([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate)
         {
-            var teacherId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
-            var attendances = await _classAttendanceManager.GetClassAttendancesByTeacherIdAsync(teacherId, fromDate, toDate);
+            var scope = await GetDataScopeAsync();
+            if (!scope.StaffId.HasValue)
+                return Forbid();
+
+            var attendances = await _classAttendanceManager.GetClassAttendancesByTeacherIdAsync(scope.StaffId.Value, fromDate, toDate);
+            if (!scope.IsUnrestricted)
+            {
+                var allowed = scope.AllowedClassIds?.ToHashSet() ?? new HashSet<Guid>();
+                attendances = attendances.Where(a => allowed.Contains(a.ClassId));
+            }
+
             var mappedAttendances = attendances.Select(MapToResponseDTO);
             return Ok(mappedAttendances);
         }
@@ -145,37 +132,21 @@ namespace sms.api.Controllers.Academic
         [HttpGet("student/{studentId}")]
         public async Task<IActionResult> GetByStudent(Guid studentId, [FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate)
         {
-            // If student, only allow access to own attendance
             if (User.IsInRole("Student"))
             {
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(userIdClaim) || studentId.ToString() != userIdClaim)
                     return Forbid();
             }
-            // If staff, only allow access to students in their assigned classes
-            else if (User.IsInRole("Staff"))
+            else
             {
-                var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(staffIdClaim))
-                    return Forbid();
-
-                var staffId = Guid.Parse(staffIdClaim);
-
-                // Get classes taught by this staff
-                var classes = await _classManager.GetClassesByTeacherIdAsync(staffId);
-                var classIds = classes.Select(c => c.Id).ToList();
-
-                // Check if student is enrolled in any of these classes
-                var enrollments = await _classEnrollmentManager.GetEnrollmentsByStudentIdAsync(studentId);
-                var studentClassIds = enrollments.Select(e => e.ClassId).ToList();
-
-                if (!studentClassIds.Any(id => classIds.Contains(id)))
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted && !scope.CanAccessStudent(studentId))
                     return Forbid();
             }
 
             var attendanceRecords = await _classAttendanceManager.GetAttendanceRecordsByStudentIdAsync(studentId, fromDate, toDate);
 
-            // Group by class and calculate summary
             var summaries = attendanceRecords
                 .GroupBy(ar => ar.ClassAttendance.ClassId)
                 .Select(g => new StudentAttendanceSummaryDTO
@@ -205,21 +176,10 @@ namespace sms.api.Controllers.Academic
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            // If staff, only allow creating attendance for their assigned classes
-            if (User.IsInRole("Staff"))
-            {
-                var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(staffIdClaim))
-                    return Forbid();
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(attendanceDto.ClassId))
+                return Forbid();
 
-                var staffId = Guid.Parse(staffIdClaim);
-                var classInfo = await _classManager.GetClassByIdAsync(attendanceDto.ClassId);
-
-                if (classInfo == null || classInfo.TeacherId != staffId)
-                    return Forbid();
-            }
-
-            // Set the creator ID from the authenticated user
             attendanceDto.CreatedById = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
 
             try
@@ -240,25 +200,14 @@ namespace sms.api.Controllers.Academic
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            // Get the record to check permissions
             var record = await _classAttendanceManager.GetAttendanceRecordWithClassAsync(recordId);
 
             if (record == null)
                 return NotFound();
 
-            // If staff, only allow updating records for their assigned classes
-            if (User.IsInRole("Staff"))
-            {
-                var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(staffIdClaim))
-                    return Forbid();
-
-                var staffId = Guid.Parse(staffIdClaim);
-                var classInfo = await _classManager.GetClassByIdAsync(record.ClassAttendance!.ClassId);
-
-                if (classInfo == null || classInfo.TeacherId != staffId)
-                    return Forbid();
-            }
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(record.ClassAttendance!.ClassId))
+                return Forbid();
 
             var result = await _classAttendanceManager.UpdateAttendanceRecordAsync(recordId, updateDto.Status, updateDto.Remarks);
             if (!result)

@@ -6,14 +6,36 @@ namespace sms.api.Constants
     /// </summary>
     public static class SystemRoleDefinitions
     {
+        /// <summary>Grant permissions for specific tabs on a page (when full-page access is too broad).</summary>
+        public sealed class TabAccessSpec
+        {
+            public required string PageCode { get; init; }
+            public required string TabKey { get; init; }
+            /// <summary>True = all tab actions; false = tab view actions only.</summary>
+            public bool FullAccess { get; init; } = true;
+        }
+
         public sealed class Definition
         {
             public required string Name { get; init; }
             public required string Description { get; init; }
             /// <summary>When true, role receives every active permission (Admin).</summary>
             public bool GrantAllPermissions { get; init; }
+            public DataScopeType DataScope { get; init; } = DataScopeType.AssignedClasses;
             public string[] FullAccessPageCodes { get; init; } = [];
             public string[] ViewOnlyPageCodes { get; init; } = [];
+            public TabAccessSpec[] TabAccessSpecs { get; init; } = [];
+        }
+
+        public static DataScopeType GetDefaultDataScopeForRoleName(string roleName)
+        {
+            return roleName.ToLowerInvariant() switch
+            {
+                "admin" or "principal" or "accountant" or "librarian" or "receptionist" or "transport manager" or "hr" => DataScopeType.Global,
+                "teacher" or "staff" => DataScopeType.AssignedClasses,
+                "student" or "parent" or "driver" => DataScopeType.OwnOnly,
+                _ => DataScopeType.AssignedClasses
+            };
         }
 
         private static readonly string[] PrincipalExcludedPages =
@@ -33,21 +55,23 @@ namespace sms.api.Constants
             {
                 Name = "Admin",
                 Description = "Full control — users, roles, settings, and all modules.",
-                GrantAllPermissions = true
+                GrantAllPermissions = true,
+                DataScope = DataScopeType.Global
             },
             new Definition
             {
                 Name = "Principal",
                 Description = "Reports and overall school monitoring (broad read access; no role/user admin).",
+                DataScope = DataScopeType.Global,
                 ViewOnlyPageCodes = PrincipalViewPages
             },
             new Definition
             {
                 Name = "Teacher",
                 Description = "Mark attendance, upload marks, assign homework, manage class academic workflow.",
+                DataScope = DataScopeType.AssignedClasses,
                 FullAccessPageCodes =
                 [
-                    PagePermissions.ManageAttendance,
                     PagePermissions.Attendance,
                     PagePermissions.HomeworkAssignments,
                     PagePermissions.LectureTopics,
@@ -59,6 +83,7 @@ namespace sms.api.Constants
                 ViewOnlyPageCodes =
                 [
                     PagePermissions.Dashboard,
+                    PagePermissions.Settings,
                     PagePermissions.Students,
                     PagePermissions.Classes,
                     PagePermissions.Subjects,
@@ -66,28 +91,40 @@ namespace sms.api.Constants
                     PagePermissions.Periods,
                     PagePermissions.Chat,
                     PagePermissions.Announcements,
-                    PagePermissions.CalendarEvents,
-                    PagePermissions.Events,
-                    PagePermissions.Holidays,
-                    PagePermissions.WeekOffs,
+                    PagePermissions.ManageCalendar,
                     PagePermissions.PtmFeedback,
                     PagePermissions.CoCurricularActivities,
                     PagePermissions.AchievementsTalents
+                ],
+                TabAccessSpecs =
+                [
+                    new TabAccessSpec { PageCode = PagePermissions.ManageAttendance, TabKey = "students", FullAccess = true },
+                    new TabAccessSpec { PageCode = PagePermissions.LeaveManagement, TabKey = "requests", FullAccess = true },
+                    new TabAccessSpec { PageCode = PagePermissions.DisciplineManagement, TabKey = "incidents", FullAccess = true },
+                    new TabAccessSpec { PageCode = PagePermissions.DisciplineManagement, TabKey = "resolved", FullAccess = false },
+                    new TabAccessSpec { PageCode = PagePermissions.DisciplineManagement, TabKey = "conduct-rules", FullAccess = false },
+                    new TabAccessSpec { PageCode = PagePermissions.StudentBehaviorManagement, TabKey = "incidents", FullAccess = true },
+                    new TabAccessSpec { PageCode = PagePermissions.StudentBehaviorManagement, TabKey = "interventions", FullAccess = false },
+                    new TabAccessSpec { PageCode = PagePermissions.PtmFeedback, TabKey = "feedback", FullAccess = true }
                 ]
             },
             new Definition
             {
                 Name = "Student",
                 Description = "View attendance, marks, timetable, homework; announcements and own fee/payment info.",
+                DataScope = DataScopeType.OwnOnly,
                 ViewOnlyPageCodes =
                 [
                     PagePermissions.Dashboard,
+                    PagePermissions.Settings,
                     PagePermissions.Attendance,
                     PagePermissions.Results,
                     PagePermissions.Timetable,
                     PagePermissions.HomeworkAssignments,
+                    PagePermissions.Exams,
                     PagePermissions.Chat,
                     PagePermissions.Announcements,
+                    PagePermissions.ManageCalendar,
                     PagePermissions.Fees,
                     PagePermissions.FeeCollection,
                     PagePermissions.OnlinePayments
@@ -97,9 +134,11 @@ namespace sms.api.Constants
             {
                 Name = "Parent",
                 Description = "Track child progress; fees, attendance, and results (read-only).",
+                DataScope = DataScopeType.OwnOnly,
                 ViewOnlyPageCodes =
                 [
                     PagePermissions.Dashboard,
+                    PagePermissions.Settings,
                     PagePermissions.Students,
                     PagePermissions.Attendance,
                     PagePermissions.Results,
@@ -111,6 +150,7 @@ namespace sms.api.Constants
                     PagePermissions.Timetable,
                     PagePermissions.Chat,
                     PagePermissions.Announcements,
+                    PagePermissions.ManageCalendar,
                     PagePermissions.OnlinePayments
                 ]
             },
@@ -118,6 +158,7 @@ namespace sms.api.Constants
             {
                 Name = "Accountant",
                 Description = "Fees collection, salary-related staff visibility, financial reports.",
+                DataScope = DataScopeType.Global,
                 FullAccessPageCodes =
                 [
                     PagePermissions.Fees,
@@ -125,12 +166,15 @@ namespace sms.api.Constants
                     PagePermissions.FeeReports,
                     PagePermissions.FeeStructures,
                     PagePermissions.FeeBulkGenerateDemands,
+                    PagePermissions.FeeManagement,
+                    PagePermissions.FeePaymentVoid,
                     PagePermissions.OnlinePayments,
                     PagePermissions.Payroll
                 ],
                 ViewOnlyPageCodes =
                 [
                     PagePermissions.Dashboard,
+                    PagePermissions.Settings,
                     PagePermissions.Analytics,
                     PagePermissions.Staff
                 ]
@@ -139,54 +183,76 @@ namespace sms.api.Constants
             {
                 Name = "Librarian",
                 Description = "Book issue/return and library records.",
+                DataScope = DataScopeType.Global,
                 FullAccessPageCodes = [PagePermissions.Library],
-                ViewOnlyPageCodes = [PagePermissions.Dashboard]
+                ViewOnlyPageCodes =
+                [
+                    PagePermissions.Dashboard,
+                    PagePermissions.Settings,
+                    PagePermissions.Students
+                ]
             },
             new Definition
             {
                 Name = "Receptionist",
                 Description = "Inquiries, visitor management, student admissions and related documents.",
+                DataScope = DataScopeType.Global,
                 FullAccessPageCodes =
                 [
                     PagePermissions.Enquiries,
                     PagePermissions.VisitorManagement,
                     PagePermissions.Students,
-                    PagePermissions.DocumentPrinting
+                    PagePermissions.DocumentPrinting,
+                    PagePermissions.TransferCertificates
                 ],
                 ViewOnlyPageCodes =
                 [
                     PagePermissions.Dashboard,
+                    PagePermissions.Settings,
                     PagePermissions.Classes,
-                    PagePermissions.AcademicYears
+                    PagePermissions.AcademicYears,
+                    PagePermissions.ManageCalendar,
+                    PagePermissions.StudentIdCards
                 ]
             },
             new Definition
             {
                 Name = "Transport Manager",
                 Description = "Bus routes, vehicles, drivers, and tracking.",
+                DataScope = DataScopeType.Global,
                 FullAccessPageCodes = [PagePermissions.BusManagement],
-                ViewOnlyPageCodes = [PagePermissions.Dashboard]
+                ViewOnlyPageCodes =
+                [
+                    PagePermissions.Dashboard,
+                    PagePermissions.Settings,
+                    PagePermissions.Staff
+                ]
             },
             new Definition
             {
                 Name = "Driver",
                 Description = "Assigned routes, stops, buses, and tracking — operational view (no master data changes).",
+                DataScope = DataScopeType.OwnOnly,
                 ViewOnlyPageCodes =
                 [
                     PagePermissions.Dashboard,
-                    PagePermissions.BusManagement,
+                    PagePermissions.Settings,
                     PagePermissions.Announcements,
-                    PagePermissions.CalendarEvents
+                    PagePermissions.ManageCalendar
+                ],
+                TabAccessSpecs =
+                [
+                    new TabAccessSpec { PageCode = PagePermissions.BusManagement, TabKey = "track", FullAccess = false }
                 ]
             },
             new Definition
             {
                 Name = "HR",
                 Description = "Staff hiring, staff attendance, leave, work allocation, payroll-related visibility.",
+                DataScope = DataScopeType.Global,
                 FullAccessPageCodes =
                 [
                     PagePermissions.Staff,
-                    PagePermissions.ManageAttendance,
                     PagePermissions.LeaveManagement,
                     PagePermissions.WorkAllocation,
                     PagePermissions.Departments,
@@ -197,8 +263,15 @@ namespace sms.api.Constants
                 ViewOnlyPageCodes =
                 [
                     PagePermissions.Dashboard,
+                    PagePermissions.Settings,
                     PagePermissions.SchoolInfo,
-                    PagePermissions.CalendarEvents
+                    PagePermissions.ManageCalendar,
+                    PagePermissions.Analytics
+                ],
+                TabAccessSpecs =
+                [
+                    new TabAccessSpec { PageCode = PagePermissions.ManageAttendance, TabKey = "staff", FullAccess = true },
+                    new TabAccessSpec { PageCode = PagePermissions.ManageAttendance, TabKey = "students", FullAccess = false }
                 ]
             }
         ];

@@ -17,8 +17,10 @@ using sms.api.Interfaces.Document;
 using sms.api.Interfaces.Fee;
 using sms.api.Interfaces.Library;
 using sms.api.Interfaces.Shared;
+using sms.api.Interfaces.Security;
 using sms.api.Interfaces.Staff;
 using sms.api.Interfaces.Student;
+using sms.api.Managers.Security;
 using sms.api.Managers.Admin;
 using sms.api.Managers.Auth;
 using sms.api.Managers.Academic;
@@ -97,6 +99,7 @@ builder.Services.Configure<LiveKitOptions>(builder.Configuration.GetSection("Liv
 builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 
 // Register Managers
+builder.Services.AddScoped<IStaffDataScopeService, StaffDataScopeService>();
 builder.Services.AddScoped<IUserManager, UserManager>();
 builder.Services.AddScoped<IAdminManager, AdminManager>();
 builder.Services.AddScoped<IStaffManager, StaffManager>();

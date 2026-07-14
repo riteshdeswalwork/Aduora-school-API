@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using sms.api.DTOs;
 using sms.api.Interfaces;
 using sms.api.Models;
+using sms.api.Utils;
 
 namespace sms.api.Controllers.Student
 {
@@ -16,64 +17,48 @@ namespace sms.api.Controllers.Student
     {
         private readonly IStudentFeeManager _studentFeeManager;
         private readonly IStudentManager _studentManager;
-        private readonly IStaffManager _staffManager;
-        private readonly IClassManager _classManager;
-        private readonly IClassEnrollmentManager _classEnrollmentManager;
 
         public StudentFeeController(
             IStudentFeeManager studentFeeManager,
-            IStudentManager studentManager,
-            IStaffManager staffManager,
-            IClassManager classManager,
-            IClassEnrollmentManager classEnrollmentManager)
+            IStudentManager studentManager)
         {
             _studentFeeManager = studentFeeManager;
             _studentManager = studentManager;
-            _staffManager = staffManager;
-            _classManager = classManager;
-            _classEnrollmentManager = classEnrollmentManager;
+        }
+
+        private static bool FeeInAllowedClasses(StudentFee fee, IReadOnlyCollection<Guid> allowed)
+        {
+            return fee.FeeStructure != null && allowed.Contains(fee.FeeStructure.ClassId);
         }
 
         [HttpGet]
         [Authorize(Roles = "Admin,Staff,Student")]
         public async Task<IActionResult> GetAll()
         {
-            var currentUserId = GetCurrentUserId();
-            var currentUserRole = GetCurrentUserRole();
-
-            if (currentUserRole == "Student")
+            if (User.IsInRole("Student"))
             {
-                // Students can only see their own fees
-                var student = await _studentManager.GetByUserIdAsync(currentUserId);
+                var student = await _studentManager.GetByUserIdAsync(GetCurrentUserId());
                 if (student == null) return Forbid();
 
                 var studentFees = await _studentFeeManager.GetStudentFeesByStudentIdAsync(student.Id);
                 return Ok(studentFees);
             }
-            else if (currentUserRole == "Staff")
+
+            var scope = await GetDataScopeAsync();
+            if (scope.IsUnrestricted)
             {
-                // Staff can only see fees for classes they are assigned to
-                var staff = await _staffManager.GetByUserIdAsync(currentUserId);
-                if (staff == null) return Forbid();
-
-                var staffClasses = await _classManager.GetClassesByStaffIdAsync(staff.Id);
-                var assignedClasses = staffClasses.Select(c => c.Id).ToList();
-
-                var studentFees = new List<StudentFee>();
-                foreach (var classId in assignedClasses)
-                {
-                    var classFees = await _studentFeeManager.GetStudentFeesByClassIdAsync(classId);
-                    studentFees.AddRange(classFees);
-                }
-
-                return Ok(studentFees.Distinct());
+                var all = await _studentFeeManager.GetAllAsync();
+                return Ok(all);
             }
-            else
+
+            var allowed = scope.AllowedClassIds?.ToList() ?? new List<Guid>();
+            var scopedFees = new List<StudentFee>();
+            foreach (var classId in allowed)
             {
-                // Admin can see all fees
-                var studentFees = await _studentFeeManager.GetAllAsync();
-                return Ok(studentFees);
+                var classFees = await _studentFeeManager.GetStudentFeesByClassIdAsync(classId);
+                scopedFees.AddRange(classFees);
             }
+            return Ok(scopedFees.DistinctBy(f => f.Id));
         }
 
         [HttpGet("report")]
@@ -84,8 +69,78 @@ namespace sms.api.Controllers.Student
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate)
         {
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted)
+            {
+                if (classId.HasValue && classId.Value != Guid.Empty)
+                {
+                    if (!scope.CanAccessClass(classId.Value))
+                        return Forbid();
+                }
+                else
+                {
+                    var allowed = scope.AllowedClassIds?.ToList() ?? new List<Guid>();
+                    if (allowed.Count == 0)
+                        return Ok(Array.Empty<FeeReportRowDto>());
+
+                    var merged = new List<FeeReportRowDto>();
+                    foreach (var cid in allowed)
+                    {
+                        var part = await _studentFeeManager.GetFeeReportAsync(academicYearId, cid, startDate, endDate);
+                        merged.AddRange(part);
+                    }
+                    return Ok(merged);
+                }
+            }
+
             var rows = await _studentFeeManager.GetFeeReportAsync(academicYearId, classId, startDate, endDate);
             return Ok(rows);
+        }
+
+        [HttpGet("paged")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> GetPaged(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] Guid? classId = null,
+            [FromQuery] string? status = null,
+            [FromQuery] Guid? academicYearId = null)
+        {
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+            var yearId = academicYearId;
+            if (!yearId.HasValue || yearId.Value == Guid.Empty)
+                yearId = GetCurrentAcademicYearId();
+
+            var scope = await GetDataScopeAsync();
+            IEnumerable<Guid>? allowedClassIds = DataScopeHelper.AllowedClassIdsForQuery(scope);
+
+            if (!scope.IsUnrestricted && classId.HasValue && classId.Value != Guid.Empty
+                && !scope.CanAccessClass(classId.Value))
+                return Forbid();
+
+            var result = await _studentFeeManager.GetStudentFeesPagedAsync(
+                pageNumber, pageSize, searchTerm, classId, status, yearId, allowedClassIds);
+
+            var totalCount = result.TotalCount;
+            var totalPages = result.TotalPages;
+            var firstItemIndex = totalCount == 0 ? 0 : (pageNumber - 1) * pageSize + 1;
+            var lastItemIndex = Math.Min(pageNumber * pageSize, totalCount);
+
+            return Ok(new
+            {
+                items = result.Items,
+                totalCount,
+                pageNumber,
+                pageSize,
+                totalPages,
+                hasPreviousPage = pageNumber > 1,
+                hasNextPage = pageNumber < totalPages,
+                firstItemIndex,
+                lastItemIndex
+            });
         }
 
         [HttpGet("defaulters")]
@@ -97,6 +152,31 @@ namespace sms.api.Controllers.Student
         {
             if (academicYearId == Guid.Empty)
                 return BadRequest("academicYearId is required.");
+
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted)
+            {
+                if (classId.HasValue && classId.Value != Guid.Empty)
+                {
+                    if (!scope.CanAccessClass(classId.Value))
+                        return Forbid();
+                }
+                else
+                {
+                    var allowed = scope.AllowedClassIds?.ToList() ?? new List<Guid>();
+                    if (allowed.Count == 0)
+                        return Ok(Array.Empty<FeeDefaulterRowDto>());
+
+                    var merged = new List<FeeDefaulterRowDto>();
+                    foreach (var cid in allowed)
+                    {
+                        var part = await _studentFeeManager.GetFeeDefaultersAsync(academicYearId, cid, minDaysOverdue);
+                        merged.AddRange(part);
+                    }
+                    return Ok(merged);
+                }
+            }
+
             var rows = await _studentFeeManager.GetFeeDefaultersAsync(academicYearId, classId, minDaysOverdue);
             return Ok(rows);
         }
@@ -109,6 +189,19 @@ namespace sms.api.Controllers.Student
             if (studentFee == null)
                 return NotFound();
 
+            if (User.IsInRole("Student"))
+            {
+                var student = await _studentManager.GetByUserIdAsync(GetCurrentUserId());
+                if (student == null || student.Id != studentFee.StudentId)
+                    return Forbid();
+            }
+            else
+            {
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted && !scope.CanAccessStudent(studentFee.StudentId))
+                    return Forbid();
+            }
+
             return Ok(studentFee);
         }
 
@@ -116,28 +209,15 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff,Student")]
         public async Task<IActionResult> GetByStudentId(Guid studentId)
         {
-            var currentUserId = GetCurrentUserId();
-            var currentUserRole = GetCurrentUserRole();
-
-            if (currentUserRole == "Student")
+            if (User.IsInRole("Student"))
             {
-                // Students can only see their own fees
-                var student = await _studentManager.GetByUserIdAsync(currentUserId);
+                var student = await _studentManager.GetByUserIdAsync(GetCurrentUserId());
                 if (student == null || student.Id != studentId) return Forbid();
             }
-            else if (currentUserRole == "Staff")
+            else
             {
-                // Staff can only see fees for students in their assigned classes
-                var staff = await _staffManager.GetByUserIdAsync(currentUserId);
-                if (staff == null) return Forbid();
-
-                var staffClasses = await _classManager.GetClassesByStaffIdAsync(staff.Id);
-                var assignedClasses = staffClasses.Select(c => c.Id).ToList();
-
-                var studentEnrollments = await _classEnrollmentManager.GetEnrollmentsByStudentIdAsync(studentId);
-                var studentClassEnrollment = studentEnrollments.FirstOrDefault();
-
-                if (studentClassEnrollment == null || !assignedClasses.Contains(studentClassEnrollment.ClassId))
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted && !scope.CanAccessStudent(studentId))
                     return Forbid();
             }
 
@@ -149,20 +229,9 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetByClassId(Guid classId)
         {
-            var currentUserId = GetCurrentUserId();
-            var currentUserRole = GetCurrentUserRole();
-
-            if (currentUserRole == "Staff")
-            {
-                // Staff can only see fees for their assigned classes
-                var staff = await _staffManager.GetByUserIdAsync(currentUserId);
-                if (staff == null) return Forbid();
-
-                var staffClasses = await _classManager.GetClassesByStaffIdAsync(staff.Id);
-                var assignedClasses = staffClasses.Select(c => c.Id).ToList();
-
-                if (!assignedClasses.Contains(classId)) return Forbid();
-            }
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(classId))
+                return Forbid();
 
             var studentFees = await _studentFeeManager.GetStudentFeesByClassIdAsync(classId);
             return Ok(studentFees);
@@ -172,7 +241,13 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetOutstanding()
         {
+            var scope = await GetDataScopeAsync();
             var studentFees = await _studentFeeManager.GetOutstandingFeesAsync();
+            if (!scope.IsUnrestricted)
+            {
+                var allowed = scope.AllowedClassIds?.ToHashSet() ?? new HashSet<Guid>();
+                studentFees = studentFees.Where(f => FeeInAllowedClasses(f, allowed));
+            }
             return Ok(studentFees);
         }
 
@@ -180,7 +255,13 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetOverdue()
         {
+            var scope = await GetDataScopeAsync();
             var studentFees = await _studentFeeManager.GetOverdueFeesAsync();
+            if (!scope.IsUnrestricted)
+            {
+                var allowed = scope.AllowedClassIds?.ToHashSet() ?? new HashSet<Guid>();
+                studentFees = studentFees.Where(f => FeeInAllowedClasses(f, allowed));
+            }
             return Ok(studentFees);
         }
 
@@ -188,7 +269,13 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetByStatus(string status)
         {
+            var scope = await GetDataScopeAsync();
             var studentFees = await _studentFeeManager.GetFeesByStatusAsync(status);
+            if (!scope.IsUnrestricted)
+            {
+                var allowed = scope.AllowedClassIds?.ToHashSet() ?? new HashSet<Guid>();
+                studentFees = studentFees.Where(f => FeeInAllowedClasses(f, allowed));
+            }
             return Ok(studentFees);
         }
 
@@ -201,6 +288,18 @@ namespace sms.api.Controllers.Student
             [FromQuery] int? billingMonth = null,
             [FromQuery] Guid? feeStructureLineId = null)
         {
+            if (User.IsInRole("Student"))
+            {
+                var student = await _studentManager.GetByUserIdAsync(GetCurrentUserId());
+                if (student == null || student.Id != studentId) return Forbid();
+            }
+            else
+            {
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted && !scope.CanAccessStudent(studentId))
+                    return Forbid();
+            }
+
             if (billingYear.HasValue && billingMonth.HasValue)
             {
                 var matches = await _studentFeeManager.GetStudentFeeLinesForBillingPeriodAsync(
@@ -242,6 +341,10 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetTotalOutstandingByClass(Guid classId)
         {
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(classId))
+                return Forbid();
+
             var total = await _studentFeeManager.GetTotalOutstandingByClassAsync(classId);
             return Ok(new { ClassId = classId, TotalOutstanding = total });
         }
@@ -250,6 +353,10 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetTotalCollectedByClass(Guid classId)
         {
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(classId))
+                return Forbid();
+
             var total = await _studentFeeManager.GetTotalCollectedByClassAsync(classId);
             return Ok(new { ClassId = classId, TotalCollected = total });
         }
@@ -312,6 +419,10 @@ namespace sms.api.Controllers.Student
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessStudent(studentFee.StudentId))
+                return Forbid();
+
             studentFee.Id = Guid.NewGuid();
             studentFee.CreatedAt = DateTime.UtcNow;
             studentFee.OutstandingAmount = studentFee.TotalAmount - studentFee.PaidAmount - studentFee.DiscountAmount;
@@ -331,6 +442,10 @@ namespace sms.api.Controllers.Student
             if (existingStudentFee == null)
                 return NotFound();
 
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessStudent(existingStudentFee.StudentId))
+                return Forbid();
+
             studentFee.Id = id;
             studentFee.CreatedAt = existingStudentFee.CreatedAt;
             studentFee.UpdatedAt = DateTime.UtcNow;
@@ -343,6 +458,14 @@ namespace sms.api.Controllers.Student
         [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> UpdateOutstanding(Guid id)
         {
+            var existing = await _studentFeeManager.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound();
+
+            var scope = await GetDataScopeAsync();
+            if (!scope.IsUnrestricted && !scope.CanAccessStudent(existing.StudentId))
+                return Forbid();
+
             var success = await _studentFeeManager.UpdateOutstandingAmountAsync(id);
             if (!success)
                 return NotFound();

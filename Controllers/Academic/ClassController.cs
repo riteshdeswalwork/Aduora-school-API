@@ -8,8 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using sms.api.DTOs;
 using sms.api.Interfaces;
 using sms.api.Interfaces.Auth;
-using sms.api.Interfaces.Staff;
-using sms.api.Interfaces.Student;
+using sms.api.Interfaces.Security;
 
 namespace sms.api.Controllers.Academic
 {
@@ -23,58 +22,61 @@ namespace sms.api.Controllers.Academic
         private readonly IStaffManager _staffManager;
         private readonly IClassEnrollmentManager _classEnrollmentManager;
         private readonly IStudentManager _studentManager;
+        private readonly IStaffDataScopeService _scopeService;
 
         public ClassController(
             IClassManager classManager,
             IUserManager userManager,
             IStaffManager staffManager,
             IClassEnrollmentManager classEnrollmentManager,
-            IStudentManager studentManager)
+            IStudentManager studentManager,
+            IStaffDataScopeService scopeService)
         {
             _classManager = classManager;
             _userManager = userManager;
             _staffManager = staffManager;
             _classEnrollmentManager = classEnrollmentManager;
             _studentManager = studentManager;
+            _scopeService = scopeService;
+        }
+
+        private Guid? GetAcademicYearIdFromHeader()
+        {
+            if (Request.Headers.TryGetValue("X-Academic-Year-Id", out var v) && Guid.TryParse(v.ToString().Trim(), out var parsed))
+                return parsed;
+            return null;
+        }
+
+        private Guid GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+                throw new UnauthorizedAccessException("User ID not found");
+            return userId;
         }
 
         // GET: api/classes?academicYearId=
         [HttpGet]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<ActionResult<IEnumerable<ClassDTO>>> GetClasses([FromQuery] Guid? academicYearId)
         {
-            // If user is Admin, return classes (filtered by academic year when provided)
-            if (User.IsInRole("Admin"))
+            var yearId = academicYearId ?? GetAcademicYearIdFromHeader();
+            var scope = await _scopeService.ResolveAsync(GetCurrentUserId(), yearId);
+
+            if (scope.IsUnrestricted)
             {
-                var classes = await _classManager.GetAllClassesAsync(academicYearId);
+                var classes = await _classManager.GetAllClassesAsync(yearId);
                 return Ok(classes);
             }
-            // If user is Staff, return only classes assigned to them (optionally filter by year)
-            else if (User.IsInRole("Staff"))
+
+            if (scope.EffectiveScope == sms.api.Constants.DataScopeType.AssignedClasses)
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim))
-                    return Forbid();
-
-                var userId = Guid.Parse(userIdClaim);
-
-                // Get Staff ID from User ID
-                var staff = await _staffManager.GetByUserIdAsync(userId);
-                if (staff == null)
-                    return NotFound(new { message = $"Staff record not found for user ID: {userId}" });
-
-                var allClasses = await _classManager.GetAllClassesAsync(academicYearId);
-                var staffClasses = await _classManager.GetClassesByStaffIdAsync(staff.Id);
-                var staffIdSet = staffClasses.Select(c => c.Id).ToHashSet();
-                var classes = allClasses.Where(c => staffIdSet.Contains(c.Id)).ToList();
-
-                return Ok(classes);
+                var allClasses = await _classManager.GetAllClassesAsync(yearId);
+                var allowed = scope.AllowedClassIds?.ToHashSet() ?? new HashSet<Guid>();
+                return Ok(allClasses.Where(c => allowed.Contains(c.Id)).ToList());
             }
-            // If user is Student, they shouldn't access this endpoint directly
-            else
-            {
-                return Forbid();
-            }
+
+            return Forbid();
         }
 
         // GET: api/classes/{id}
@@ -82,41 +84,14 @@ namespace sms.api.Controllers.Academic
         public async Task<ActionResult<ClassDTO>> GetClass(Guid id)
         {
             var classDto = await _classManager.GetClassByIdAsync(id);
-
             if (classDto == null)
-            {
                 return NotFound();
-            }
 
-            // If user is Admin, allow access to any class
-            if (User.IsInRole("Admin"))
-            {
-                return Ok(classDto);
-            }
-            // If user is Staff, only allow access to classes assigned to them
-            else if (User.IsInRole("Staff"))
-            {
-                var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(staffIdClaim))
-                    return Forbid();
-
-                var staffId = Guid.Parse(staffIdClaim);
-
-                // Check if this class is assigned to the staff member
-                if (classDto.TeacherId == staffId)
-                {
-                    return Ok(classDto);
-                }
-                else
-                {
-                    return Forbid();
-                }
-            }
-            // If user is Student, they shouldn't access this endpoint directly
-            else
-            {
+            var scope = await _scopeService.ResolveAsync(GetCurrentUserId(), GetAcademicYearIdFromHeader());
+            if (!scope.IsUnrestricted && !scope.CanAccessClass(id))
                 return Forbid();
-            }
+
+            return Ok(classDto);
         }
 
         // POST: api/classes
@@ -142,47 +117,23 @@ namespace sms.api.Controllers.Academic
                 return BadRequest(ModelState);
             }
 
-            // If user is Admin, allow updating any class
-            if (User.IsInRole("Admin"))
+            // Scope check for update
+            var scope = await _scopeService.ResolveAsync(GetCurrentUserId(), GetAcademicYearIdFromHeader());
+            var existingClass = await _classManager.GetClassByIdAsync(id);
+            if (existingClass == null)
+                return NotFound();
+
+            if (!scope.IsUnrestricted)
             {
-                var updatedClass = await _classManager.UpdateClassAsync(id, classDto);
-
-                if (updatedClass == null)
-                {
-                    return NotFound();
-                }
-
-                return Ok(updatedClass);
-            }
-            // If user is Staff, only allow updating classes assigned to them
-            else if (User.IsInRole("Staff"))
-            {
-                var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(staffIdClaim))
+                if (!scope.CanAccessClass(id))
                     return Forbid();
-
-                var staffId = Guid.Parse(staffIdClaim);
-
-                // Get the class to check if it's assigned to this staff
-                var existingClass = await _classManager.GetClassByIdAsync(id);
-                if (existingClass == null)
-                    return NotFound();
-
-                // Only allow staff to update their own classes
-                if (existingClass.TeacherId != staffId)
-                    return Forbid();
-
-                // Staff can only update certain fields, not reassign the class
-                // Preserve the original teacher ID
                 classDto.TeacherId = existingClass.TeacherId;
+            }
 
-                var updatedClass = await _classManager.UpdateClassAsync(id, classDto);
-                return Ok(updatedClass);
-            }
-            else
-            {
-                return Forbid();
-            }
+            var updatedClass = await _classManager.UpdateClassAsync(id, classDto);
+            if (updatedClass == null)
+                return NotFound();
+            return Ok(updatedClass);
         }
 
         // DELETE: api/classes/{id}
@@ -204,32 +155,15 @@ namespace sms.api.Controllers.Academic
         [HttpGet("staff/{staffId}")]
         public async Task<ActionResult<IEnumerable<ClassDTO>>> GetClassesByStaffId(Guid staffId)
         {
-            // If user is Admin, allow access to any staff's classes
-            if (User.IsInRole("Admin"))
+            var scope = await _scopeService.ResolveAsync(GetCurrentUserId(), GetAcademicYearIdFromHeader());
+            if (!scope.IsUnrestricted)
             {
-                var classes = await _classManager.GetClassesByStaffIdAsync(staffId);
-                return Ok(classes);
-            }
-            // If user is Staff, only allow access to their own classes
-            else if (User.IsInRole("Staff"))
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim))
+                if (!scope.StaffId.HasValue || scope.StaffId.Value != staffId)
                     return Forbid();
-
-                var userId = Guid.Parse(userIdClaim);
-
-                // Only allow staff to view their own classes
-                if (staffId != userId)
-                    return Forbid();
-
-                var classes = await _classManager.GetClassesByStaffIdAsync(staffId);
-                return Ok(classes);
             }
-            else
-            {
-                return Forbid();
-            }
+
+            var classes = await _classManager.GetClassesByStaffIdAsync(staffId);
+            return Ok(classes);
         }
 
         [HttpGet("debug-staff-mapping")]

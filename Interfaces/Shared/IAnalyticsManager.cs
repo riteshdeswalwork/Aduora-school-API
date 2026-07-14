@@ -4,13 +4,13 @@ namespace sms.api.Interfaces.Shared
 {
     public interface IAnalyticsManager
     {
-        Task<DashboardAnalyticsDTO> GetDashboardAnalyticsAsync();
-        Task<StudentAnalyticsDTO> GetStudentAnalyticsAsync();
+        Task<DashboardAnalyticsDTO> GetDashboardAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null);
+        Task<StudentAnalyticsDTO> GetStudentAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null);
         Task<StaffAnalyticsDTO> GetStaffAnalyticsAsync();
-        Task<AttendanceAnalyticsDTO> GetAttendanceAnalyticsAsync();
-        Task<FeeAnalyticsDTO> GetFeeAnalyticsAsync();
-        Task<ExamAnalyticsDTO> GetExamAnalyticsAsync();
-        Task<ClassAnalyticsDTO> GetClassAnalyticsAsync();
+        Task<AttendanceAnalyticsDTO> GetAttendanceAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null);
+        Task<FeeAnalyticsDTO> GetFeeAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null);
+        Task<ExamAnalyticsDTO> GetExamAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null);
+        Task<ClassAnalyticsDTO> GetClassAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null);
         Task<DepartmentAnalyticsDTO> GetDepartmentAnalyticsAsync();
     }
 }

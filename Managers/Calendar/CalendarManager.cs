@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
-using sms.api.Interfaces.Calendar;
+using sms.api.Helpers;
 using sms.api.Interfaces.Shared;
 using sms.api.Interfaces.Staff;
 using sms.api.Interfaces.Student;
@@ -293,18 +293,19 @@ namespace sms.api.Managers.Calendar
 
             foreach (var weekOff in weekOffs)
             {
-                var current = startDate;
-                while (current <= endDate)
+                var current = startDate.Date;
+                while (current <= endDate.Date)
                 {
-                    if ((int)current.DayOfWeek == weekOff.DayOfWeek &&
-                        current >= weekOff.EffectiveFrom &&
-                        (weekOff.EffectiveTo == null || current <= weekOff.EffectiveTo))
+                    if (WeekOffPatternHelper.MatchesDate(current, weekOff))
                     {
                         items.Add(new CalendarItemDTO
                         {
-                            Id = Guid.NewGuid(), // Generate unique ID for each occurrence
-                            Title = $"Week Off - {weekOff.Name}",
-                            Description = weekOff.Description,
+                            Id = weekOff.Id,
+                            SourceId = weekOff.Id,
+                            Title = weekOff.Name,
+                            Description = string.IsNullOrWhiteSpace(weekOff.Description)
+                                ? WeekOffPatternHelper.PatternLabel(weekOff)
+                                : weekOff.Description,
                             StartDate = current,
                             EndDate = current,
                             Type = "WeekOff",

@@ -22,8 +22,25 @@ namespace sms.api.Controllers.Attendance
             public Guid StaffId { get; set; }
             public DateTime Date { get; set; }
             public bool IsPresent { get; set; }
+            public string Status { get; set; } = "Present";
             public string Remarks { get; set; } = string.Empty;
         }
+
+        private static string NormalizeStatus(string? status, bool isPresent)
+        {
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                var s = status.Trim();
+                if (string.Equals(s, "Present", StringComparison.OrdinalIgnoreCase)) return "Present";
+                if (string.Equals(s, "Absent", StringComparison.OrdinalIgnoreCase)) return "Absent";
+                if (string.Equals(s, "Late", StringComparison.OrdinalIgnoreCase)) return "Late";
+            }
+            return isPresent ? "Present" : "Absent";
+        }
+
+        private static bool StatusToIsPresent(string status) =>
+            string.Equals(status, "Present", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "Late", StringComparison.OrdinalIgnoreCase);
 
         [HttpGet]
         public async Task<IActionResult> Get([FromQuery] DateTime? date)
@@ -53,10 +70,13 @@ namespace sms.api.Controllers.Attendance
                 return BadRequest(new { message = "Academic year not set" });
             foreach (var r in records)
             {
+                var status = NormalizeStatus(r.Status, r.IsPresent);
+                var isPresent = StatusToIsPresent(status);
                 var existing = await _context.StaffAttendances.FirstOrDefaultAsync(a => a.StaffId == r.StaffId && a.Date.Date == r.Date.Date);
                 if (existing != null)
                 {
-                    existing.IsPresent = r.IsPresent;
+                    existing.Status = status;
+                    existing.IsPresent = isPresent;
                     existing.Remarks = r.Remarks ?? string.Empty;
                 }
                 else
@@ -67,9 +87,10 @@ namespace sms.api.Controllers.Attendance
                         StaffId = r.StaffId,
                         AcademicYearId = yearId.Value,
                         Date = r.Date.Date,
-                        IsPresent = r.IsPresent,
+                        Status = status,
+                        IsPresent = isPresent,
                         Remarks = r.Remarks ?? string.Empty,
-                        CheckInTime = r.IsPresent ? DateTime.UtcNow : null,
+                        CheckInTime = isPresent ? DateTime.UtcNow : null,
                         CheckOutTime = null
                     });
                 }
@@ -112,6 +133,7 @@ namespace sms.api.Controllers.Attendance
                     StaffId = dto.StaffId,
                     AcademicYearId = yearId.Value,
                     Date = dto.Date.Date,
+                    Status = "Present",
                     IsPresent = true,
                     Remarks = string.Empty,
                     CheckInTime = now
@@ -120,6 +142,7 @@ namespace sms.api.Controllers.Attendance
             }
             else
             {
+                existing.Status = "Present";
                 existing.IsPresent = true;
                 existing.CheckInTime = now;
             }

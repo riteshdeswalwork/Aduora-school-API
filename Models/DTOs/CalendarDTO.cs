@@ -18,6 +18,7 @@ namespace sms.api.Models.DTOs
         public string? AttachmentUrl { get; set; }
         public bool RequiresAttendance { get; set; } = false;
         public DateTime CreatedAt { get; set; }
+        public Guid? SourceId { get; set; }
     }
 
     public class CalendarViewDTO

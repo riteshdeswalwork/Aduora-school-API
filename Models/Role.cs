@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
+using sms.api.Constants;
 
 namespace sms.api.Models
 {
@@ -15,6 +16,9 @@ namespace sms.api.Models
 
         [StringLength(500)]
         public string Description { get; set; } = string.Empty;
+
+        /// <summary>Data visibility: Global, AssignedClasses (class teacher), or OwnOnly.</summary>
+        public DataScopeType DataScope { get; set; } = DataScopeType.AssignedClasses;
 
         [Required]
         public bool IsActive { get; set; } = true;

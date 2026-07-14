@@ -15,6 +15,8 @@ namespace sms.api.Models.DTOs
         public bool IsActive { get; set; } = true;
         public DateTime EffectiveFrom { get; set; }
         public DateTime? EffectiveTo { get; set; }
+        public string PatternType { get; set; } = "EveryWeek";
+        public string WeekOccurrences { get; set; } = string.Empty;
         public string CreatedByName { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
@@ -42,6 +44,12 @@ namespace sms.api.Models.DTOs
         public DateTime EffectiveFrom { get; set; } = DateTime.UtcNow;
 
         public DateTime? EffectiveTo { get; set; }
+
+        [StringLength(20)]
+        public string PatternType { get; set; } = "EveryWeek";
+
+        [StringLength(50)]
+        public string WeekOccurrences { get; set; } = string.Empty;
     }
 
     public class UpdateWeekOffDTO
@@ -64,5 +72,11 @@ namespace sms.api.Models.DTOs
         public DateTime? EffectiveFrom { get; set; }
 
         public DateTime? EffectiveTo { get; set; }
+
+        [StringLength(20)]
+        public string? PatternType { get; set; }
+
+        [StringLength(50)]
+        public string? WeekOccurrences { get; set; }
     }
 }

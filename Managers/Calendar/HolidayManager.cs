@@ -124,7 +124,7 @@ namespace sms.api.Managers.Calendar
             {
                 Id = Guid.NewGuid(),
                 Name = createHolidayDto.Name,
-                Description = createHolidayDto.Description,
+                Description = createHolidayDto.Description ?? string.Empty,
                 StartDate = createHolidayDto.StartDate,
                 EndDate = createHolidayDto.EndDate,
                 HolidayType = createHolidayDto.HolidayType,
@@ -153,7 +153,7 @@ namespace sms.api.Managers.Calendar
             if (!string.IsNullOrEmpty(updateHolidayDto.Name))
                 holiday.Name = updateHolidayDto.Name;
            
-            if (!string.IsNullOrEmpty(updateHolidayDto.Description))
+            if (updateHolidayDto.Description != null)
                 holiday.Description = updateHolidayDto.Description;
            
             if (updateHolidayDto.StartDate.HasValue)

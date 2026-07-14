@@ -110,5 +110,9 @@ namespace sms.api.Models.DTOs
 
         /// <summary>Optional. When provided, updates user's role (UserRole and User.Role).</summary>
         public Guid? RoleId { get; set; }
+
+        /// <summary>Optional. When provided (min 6 chars), updates the linked user's password.</summary>
+        [StringLength(100, MinimumLength = 6)]
+        public string? Password { get; set; }
     }
 }

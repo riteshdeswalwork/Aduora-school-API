@@ -181,6 +181,76 @@ namespace sms.api.Controllers.Bus
             }
         }
 
+        [HttpGet("maintenance/paged")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> GetMaintenanceRecordsPaged(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] Guid? busId = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] string? maintenanceType = null)
+        {
+            try
+            {
+                var all = await _busManager.GetAllMaintenanceRecordsAsync(busId, searchTerm, maintenanceType);
+                var list = all.ToList();
+                var totalCount = list.Count;
+                var items = list.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToList();
+                var totalPages = pageSize > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 0;
+                var first = totalCount == 0 ? 0 : (pageNumber - 1) * pageSize + 1;
+                var last = totalCount == 0 ? 0 : Math.Min(pageNumber * pageSize, totalCount);
+                return Ok(new
+                {
+                    items,
+                    totalCount,
+                    pageNumber,
+                    pageSize,
+                    totalPages,
+                    hasPreviousPage = pageNumber > 1,
+                    hasNextPage = pageNumber < totalPages,
+                    firstItemIndex = first,
+                    lastItemIndex = last
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving maintenance records", error = ex.Message });
+            }
+        }
+
+        [HttpGet("maintenance")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> GetAllMaintenanceRecords(
+            [FromQuery] Guid? busId = null,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] string? maintenanceType = null)
+        {
+            try
+            {
+                var records = await _busManager.GetAllMaintenanceRecordsAsync(busId, searchTerm, maintenanceType);
+                return Ok(records);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving maintenance records", error = ex.Message });
+            }
+        }
+
+        [HttpGet("maintenance/record/{id}")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> GetMaintenanceRecordById(Guid id)
+        {
+            try
+            {
+                var record = await _busManager.GetMaintenanceRecordByIdAsync(id);
+                return record == null ? NotFound(new { message = "Maintenance record not found" }) : Ok(record);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving maintenance record", error = ex.Message });
+            }
+        }
+
         [HttpGet("{id}/maintenance")]
         public async Task<IActionResult> GetBusMaintenanceRecords(Guid id)
         {
@@ -196,7 +266,7 @@ namespace sms.api.Controllers.Bus
         }
 
         [HttpPost("maintenance")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CreateMaintenanceRecord([FromBody] CreateBusMaintenanceDTO createDto)
         {
             try
@@ -212,6 +282,42 @@ namespace sms.api.Controllers.Bus
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error creating maintenance record", error = ex.Message });
+            }
+        }
+
+        [HttpPut("maintenance/{id}")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> UpdateMaintenanceRecord(Guid id, [FromBody] UpdateBusMaintenanceDTO updateDto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new UnauthorizedAccessException());
+                var updated = await _busManager.UpdateMaintenanceRecordAsync(id, updateDto, userId);
+                if (updated == null) return NotFound(new { message = "Maintenance record not found" });
+                return Ok(updated);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error updating maintenance record", error = ex.Message });
+            }
+        }
+
+        [HttpDelete("maintenance/{id}")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> DeleteMaintenanceRecord(Guid id)
+        {
+            try
+            {
+                var deleted = await _busManager.DeleteMaintenanceRecordAsync(id);
+                if (!deleted) return NotFound(new { message = "Maintenance record not found" });
+                return Ok(new { message = "Deleted" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error deleting maintenance record", error = ex.Message });
             }
         }
 

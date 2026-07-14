@@ -143,8 +143,13 @@ namespace sms.api.Data
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            // When adding year-dependent entities, set AcademicYearId from request context if not already set
-            if (CurrentAcademicYearId.HasValue)
+            var academicYearId = CurrentAcademicYearId;
+            if (!academicYearId.HasValue || academicYearId.Value == Guid.Empty)
+            {
+                academicYearId = await ResolveCurrentAcademicYearIdAsync(cancellationToken);
+            }
+
+            if (academicYearId.HasValue && academicYearId.Value != Guid.Empty)
             {
                 foreach (var entry in ChangeTracker.Entries())
                 {
@@ -153,10 +158,22 @@ namespace sms.api.Data
                     if (prop?.ClrType != typeof(Guid)) continue;
                     var current = entry.Property("AcademicYearId").CurrentValue;
                     if (current == null || (Guid)current == default)
-                        entry.Property("AcademicYearId").CurrentValue = CurrentAcademicYearId.Value;
+                        entry.Property("AcademicYearId").CurrentValue = academicYearId.Value;
                 }
             }
             return await base.SaveChangesAsync(cancellationToken);
+        }
+
+        private async Task<Guid?> ResolveCurrentAcademicYearIdAsync(CancellationToken cancellationToken)
+        {
+            var current = await AcademicYears.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.IsCurrentYear, cancellationToken);
+            if (current != null) return current.Id;
+
+            var latest = await AcademicYears.AsNoTracking()
+                .OrderByDescending(a => a.StartDate)
+                .FirstOrDefaultAsync(cancellationToken);
+            return latest?.Id;
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

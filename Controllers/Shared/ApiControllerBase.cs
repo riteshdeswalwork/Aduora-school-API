@@ -1,7 +1,10 @@
 using System;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using sms.api.Interfaces.Security;
 using sms.api.Middleware;
+using sms.api.Models.Security;
 
 namespace sms.api.Controllers.Shared
 {
@@ -39,6 +42,12 @@ namespace sms.api.Controllers.Shared
         {
             var emailClaim = User.FindFirst(ClaimTypes.Email) ?? User.FindFirst("email");
             return emailClaim?.Value;
+        }
+
+        protected async Task<StaffScopeContext> GetDataScopeAsync()
+        {
+            var scopeService = HttpContext.RequestServices.GetRequiredService<IStaffDataScopeService>();
+            return await scopeService.ResolveAsync(GetCurrentUserId(), GetCurrentAcademicYearId());
         }
     }
 }
