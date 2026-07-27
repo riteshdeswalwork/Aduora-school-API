@@ -29,7 +29,8 @@ public class SmtpEmailService : IEmailService
 
         if (string.IsNullOrWhiteSpace(_settings.SmtpHost) || string.IsNullOrWhiteSpace(_settings.FromEmail))
         {
-            throw new InvalidOperationException("Email settings are not configured (SmtpHost/FromEmail).");
+            _logger.LogWarning("Email settings are not configured (SmtpHost/FromEmail). Skipping send.");
+            return;
         }
 
         using var message = new MailMessage

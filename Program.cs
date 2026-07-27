@@ -82,7 +82,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
                 // If the request is for our SignalR hub...
                 var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/onlineclasshub") || path.StartsWithSegments("/chathub")))
+                if (!string.IsNullOrEmpty(accessToken) && (
+                    path.StartsWithSegments("/onlineclasshub")
+                    || path.StartsWithSegments("/chathub")
+                    || path.StartsWithSegments("/notificationhub")))
                 {
                     // Read the token out of the query string
                     context.Token = accessToken;
@@ -155,6 +158,7 @@ builder.Services.AddScoped<IAssetManager, AssetManager>();
 builder.Services.AddScoped<IAssetMaintenanceManager, AssetMaintenanceManager>();
 builder.Services.AddScoped<IBiometricDeviceManager, BiometricDeviceManager>();
 builder.Services.AddScoped<IBiometricLogManager, BiometricLogManager>();
+builder.Services.AddScoped<IBiometricAttendanceService, BiometricAttendanceService>();
 builder.Services.AddScoped<IOnlinePaymentTransactionManager, OnlinePaymentTransactionManager>();
 builder.Services.AddScoped<IDisciplineIncidentManager, DisciplineIncidentManager>();
 builder.Services.AddScoped<IStudentBehaviorIncidentManager, StudentBehaviorIncidentManager>();
@@ -184,10 +188,16 @@ builder.Services.Configure<GoogleReCaptchaConfig>(options =>
 builder.Services.AddScoped<IRecaptchaService, RecaptchaService>();
 
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("Email"));
+builder.Services.Configure<TwilioSettings>(builder.Configuration.GetSection("Twilio"));
+builder.Services.Configure<NotificationSettings>(builder.Configuration.GetSection("Notifications"));
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddSingleton<ITwilioSmsService, TwilioSmsService>();
+builder.Services.AddSingleton<INotificationOrchestrator, NotificationOrchestrator>();
 builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
 builder.Services.AddHostedService<QueuedHostedService>();
 builder.Services.AddHostedService<MonthlyFeeDemandBackgroundService>();
+builder.Services.AddSingleton<IHostResourceMetricsService, HostResourceMetricsService>();
+builder.Services.AddHostedService<SystemHealthAlertBackgroundService>();
 builder.Services.AddSingleton<ITrafficMetricsService, TrafficMetricsService>();
 
 // Bus Management System
@@ -290,6 +300,7 @@ app.MapControllers();
 // Map SignalR Hub
 app.MapHub<OnlineClassHub>("/onlineclasshub");
 app.MapHub<ChatHub>("/chathub");
+app.MapHub<NotificationHub>("/notificationhub");
 
 // Ensure database is created and updated
 using (var scope = app.Services.CreateScope())

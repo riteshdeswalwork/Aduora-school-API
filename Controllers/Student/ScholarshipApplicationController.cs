@@ -5,6 +5,7 @@ using sms.api.Controllers.Shared;
 using sms.api.Data;
 using sms.api.Interfaces.Student;
 using sms.api.Models;
+using sms.api.Services;
 using sms.api.Utils;
 
 namespace sms.api.Controllers.Student
@@ -15,11 +16,13 @@ namespace sms.api.Controllers.Student
     {
         private readonly ApplicationDbContext _context;
         private readonly IScholarshipApplicationManager _manager;
+        private readonly INotificationOrchestrator? _notify;
 
-        public ScholarshipApplicationController(ApplicationDbContext context, IScholarshipApplicationManager manager)
+        public ScholarshipApplicationController(ApplicationDbContext context, IScholarshipApplicationManager manager, INotificationOrchestrator? notify = null)
         {
             _context = context;
             _manager = manager;
+            _notify = notify;
         }
 
         [HttpGet]
@@ -81,12 +84,14 @@ namespace sms.api.Controllers.Student
             if (existing == null) return NotFound(new { message = "Scholarship application not found" });
             entity.Id = id;
             if (entity.AcademicYearId == default) entity.AcademicYearId = existing.AcademicYearId;
+            var priorStatus = existing.Status;
             if (string.Equals(entity.Status, "Approved", StringComparison.OrdinalIgnoreCase) && !existing.ApprovedAt.HasValue)
             {
                 entity.ApprovedAt = DateTime.UtcNow;
                 entity.ApprovedByUserId = GetCurrentUserId();
             }
             var updated = await _manager.UpdateAsync(entity);
+            await NotifyApprovedAsync(updated, priorStatus);
             return Ok(updated);
         }
 
@@ -100,7 +105,31 @@ namespace sms.api.Controllers.Student
             existing.ApprovedAt = DateTime.UtcNow;
             existing.ApprovedByUserId = GetCurrentUserId();
             await _context.SaveChangesAsync();
+            await NotifyApprovedAsync(existing, "Pending");
             return Ok(existing);
+        }
+
+        private async Task NotifyApprovedAsync(ScholarshipApplication app, string? priorStatus)
+        {
+            if (!string.Equals(app.Status, "Approved", StringComparison.OrdinalIgnoreCase)) return;
+            if (string.Equals(priorStatus, "Approved", StringComparison.OrdinalIgnoreCase)) return;
+            if (!app.StudentId.HasValue) return;
+
+            var studentUserId = await NotificationEvents.GetStudentUserIdAsync(_context, app.StudentId.Value);
+            if (!studentUserId.HasValue) return;
+
+            await NotificationEvents.NotifyUsersAsync(
+                _notify,
+                new[] { studentUserId.Value },
+                "Scholarship application approved",
+                "Your scholarship application has been approved.",
+                "scholarship.approved",
+                "approvals",
+                NotificationChannels.All,
+                app.Id,
+                "ScholarshipApplication",
+                "success",
+                idempotencyKey: $"scholarship.approved:{app.Id}");
         }
 
         [HttpDelete("{id}")]

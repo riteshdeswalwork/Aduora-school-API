@@ -264,48 +264,136 @@ namespace sms.api.Controllers.Shared
         {
             try
             {
+                string databaseName = _context.Database.GetDbConnection().Database ?? "—";
                 double databaseSizeMb = 0;
+                double dataFileMb = 0;
+                double logFileMb = 0;
+                double usedSpaceMb = 0;
+                double unusedSpaceMb = 0;
+                var fileBreakdown = new List<object>();
+
                 try
                 {
-                    var sizeResult = await _context.Database
-                        .SqlQueryRaw<double>("SELECT CAST(SUM(size * 8.0 / 1024) AS FLOAT) AS Value FROM sys.master_files WHERE database_id = DB_ID()")
-                        .ToListAsync();
-                    if (sizeResult.Count > 0) databaseSizeMb = sizeResult[0];
+                    var conn = _context.Database.GetDbConnection();
+                    if (conn.State != System.Data.ConnectionState.Open)
+                        await conn.OpenAsync();
+
+                    // Allocated size by file (data vs log)
+                    await using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = @"
+SELECT
+  name,
+  type_desc,
+  CAST(size * 8.0 / 1024 AS FLOAT) AS SizeMb
+FROM sys.database_files
+ORDER BY type_desc, name;";
+                        await using var reader = await cmd.ExecuteReaderAsync();
+                        while (await reader.ReadAsync())
+                        {
+                            var name = reader.GetString(0);
+                            var typeDesc = reader.GetString(1);
+                            var sizeMb = reader.GetDouble(2);
+                            fileBreakdown.Add(new { name, type = typeDesc, sizeMb = Math.Round(sizeMb, 2) });
+                            if (string.Equals(typeDesc, "ROWS", StringComparison.OrdinalIgnoreCase))
+                                dataFileMb += sizeMb;
+                            else if (string.Equals(typeDesc, "LOG", StringComparison.OrdinalIgnoreCase))
+                                logFileMb += sizeMb;
+                            databaseSizeMb += sizeMb;
+                        }
+                    }
+
+                    // Used vs unused within data file (approx)
+                    await using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = @"
+SELECT
+  CAST(SUM(a.total_pages) * 8.0 / 1024 AS FLOAT) AS ReservedMb,
+  CAST(SUM(a.used_pages) * 8.0 / 1024 AS FLOAT) AS UsedMb
+FROM sys.allocation_units a;";
+                        await using var reader = await cmd.ExecuteReaderAsync();
+                        if (await reader.ReadAsync())
+                        {
+                            var reserved = reader.IsDBNull(0) ? 0 : reader.GetDouble(0);
+                            usedSpaceMb = reader.IsDBNull(1) ? 0 : reader.GetDouble(1);
+                            unusedSpaceMb = Math.Max(0, reserved - usedSpaceMb);
+                        }
+                    }
                 }
-                catch { /* non-SQL Server or permission */ }
+                catch
+                {
+                    /* non-SQL Server or permission — keep zeros */
+                }
 
                 var tableCounts = new List<object>();
                 long totalRows = 0;
                 try
                 {
-                    var u = await _context.Users.CountAsync();
-                    var s = await _context.Students.CountAsync();
-                    var st = await _context.Staff.CountAsync();
-                    var c = await _context.Classes.CountAsync();
-                    var e = await _context.Exams.CountAsync();
-                    var fp = await _context.FeePayments.CountAsync();
-                    var car = await _context.ClassAttendanceRecords.CountAsync();
-                    var a = await _context.Announcements.CountAsync();
-                    var cm = await _context.ChatMessages.CountAsync();
-                    var v = await _context.VisitorEntries.CountAsync();
-                    tableCounts.Add(new { tableName = "Users", rowCount = u });
-                    tableCounts.Add(new { tableName = "Students", rowCount = s });
-                    tableCounts.Add(new { tableName = "Staff", rowCount = st });
-                    tableCounts.Add(new { tableName = "Classes", rowCount = c });
-                    tableCounts.Add(new { tableName = "Exams", rowCount = e });
-                    tableCounts.Add(new { tableName = "FeePayments", rowCount = fp });
-                    tableCounts.Add(new { tableName = "ClassAttendanceRecords", rowCount = car });
-                    tableCounts.Add(new { tableName = "Announcements", rowCount = a });
-                    tableCounts.Add(new { tableName = "ChatMessages", rowCount = cm });
-                    tableCounts.Add(new { tableName = "VisitorEntries", rowCount = v });
-                    totalRows = u + s + st + c + e + fp + car + a + cm + v;
+                    var conn = _context.Database.GetDbConnection();
+                    if (conn.State != System.Data.ConnectionState.Open)
+                        await conn.OpenAsync();
+
+                    // Top user tables by row count + approx size (MB)
+                    await using var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+SELECT TOP 25
+  t.name AS TableName,
+  SUM(CASE WHEN p.index_id IN (0, 1) THEN p.rows ELSE 0 END) AS [RowCnt],
+  CAST(SUM(a.total_pages) * 8.0 / 1024 AS FLOAT) AS SizeMb
+FROM sys.tables t
+INNER JOIN sys.indexes i ON t.object_id = i.object_id
+INNER JOIN sys.partitions p ON i.object_id = p.object_id AND i.index_id = p.index_id
+INNER JOIN sys.allocation_units a ON p.partition_id = a.container_id
+WHERE t.is_ms_shipped = 0
+GROUP BY t.name
+ORDER BY [RowCnt] DESC, SizeMb DESC;";
+                    await using var reader = await cmd.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        var tableName = reader.GetString(0);
+                        var rowCount = reader.IsDBNull(1) ? 0L : Convert.ToInt64(reader.GetValue(1));
+                        var sizeMb = reader.IsDBNull(2) ? 0d : Convert.ToDouble(reader.GetValue(2));
+                        tableCounts.Add(new
+                        {
+                            tableName,
+                            rowCount,
+                            sizeMb = Math.Round(sizeMb, 2)
+                        });
+                        totalRows += rowCount;
+                    }
                 }
-                catch { /* ignore */ }
+                catch
+                {
+                    // Fallback: sample known entity sets
+                    try
+                    {
+                        var u = await _context.Users.CountAsync();
+                        var s = await _context.Students.CountAsync();
+                        var st = await _context.Staff.CountAsync();
+                        var c = await _context.Classes.CountAsync();
+                        var e = await _context.Exams.CountAsync();
+                        var fp = await _context.FeePayments.CountAsync();
+                        tableCounts.Add(new { tableName = "Users", rowCount = (long)u, sizeMb = 0d });
+                        tableCounts.Add(new { tableName = "Students", rowCount = (long)s, sizeMb = 0d });
+                        tableCounts.Add(new { tableName = "Staff", rowCount = (long)st, sizeMb = 0d });
+                        tableCounts.Add(new { tableName = "Classes", rowCount = (long)c, sizeMb = 0d });
+                        tableCounts.Add(new { tableName = "Exams", rowCount = (long)e, sizeMb = 0d });
+                        tableCounts.Add(new { tableName = "FeePayments", rowCount = (long)fp, sizeMb = 0d });
+                        totalRows = u + s + st + c + e + fp;
+                    }
+                    catch { /* ignore */ }
+                }
 
                 var result = new
                 {
+                    databaseName,
                     databaseSizeMb = Math.Round(databaseSizeMb, 2),
-                    databaseSizeGb = Math.Round(databaseSizeMb / 1024.0, 2),
+                    databaseSizeGb = Math.Round(databaseSizeMb / 1024.0, 3),
+                    dataFileMb = Math.Round(dataFileMb, 2),
+                    logFileMb = Math.Round(logFileMb, 2),
+                    usedSpaceMb = Math.Round(usedSpaceMb, 2),
+                    unusedSpaceMb = Math.Round(unusedSpaceMb, 2),
+                    fileBreakdown,
                     tableCounts,
                     totalRows,
                     environment = new
@@ -319,6 +407,7 @@ namespace sms.api.Controllers.Shared
                     {
                         providerName = _context.Database.ProviderName,
                         canConnect = await _context.Database.CanConnectAsync(),
+                        databaseName,
                     },
                     traffic = _trafficMetrics.GetSnapshot()
                 };

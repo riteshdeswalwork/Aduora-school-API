@@ -15,45 +15,60 @@ namespace sms.api.Controllers
     public class NotificationController : ControllerBase
     {
         private readonly IFirebaseNotificationService _firebaseService;
+        private readonly INotificationOrchestrator _orchestrator;
         private readonly ApplicationDbContext _context;
         private readonly ILogger<NotificationController> _logger;
 
         public NotificationController(
             IFirebaseNotificationService firebaseService,
+            INotificationOrchestrator orchestrator,
             ApplicationDbContext context,
             ILogger<NotificationController> logger)
         {
             _firebaseService = firebaseService;
+            _orchestrator = orchestrator;
             _context = context;
             _logger = logger;
         }
 
-        /// <summary>
-        /// Register FCM token for the current user
-        /// </summary>
+        private bool TryGetUserId(out Guid userId)
+        {
+            userId = Guid.Empty;
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("sub")?.Value
+                ?? User.FindFirst("id")?.Value;
+            return !string.IsNullOrEmpty(userIdClaim) && Guid.TryParse(userIdClaim, out userId);
+        }
+
+        private static NotificationChannels ParseChannels(SendChannelsDto? channels)
+        {
+            if (channels == null)
+                return NotificationChannels.All;
+
+            var c = NotificationChannels.None;
+            if (channels.InApp) c |= NotificationChannels.InApp;
+            if (channels.Push) c |= NotificationChannels.Push;
+            if (channels.Email) c |= NotificationChannels.Email;
+            if (channels.Sms) c |= NotificationChannels.Sms;
+            return c == NotificationChannels.None ? NotificationChannels.Push | NotificationChannels.InApp : c;
+        }
+
         [HttpPost("register-token")]
         public async Task<IActionResult> RegisterToken([FromBody] RegisterTokenRequest request)
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
-                {
+                if (!TryGetUserId(out var userId))
                     return Unauthorized();
-                }
 
                 if (string.IsNullOrEmpty(request.Token))
-                {
                     return BadRequest(new { message = "Token is required" });
-                }
 
-                // Check if token already exists for this user
                 var existingToken = await _context.FcmTokens
                     .FirstOrDefaultAsync(t => t.Token == request.Token && t.UserId == userId);
 
                 if (existingToken != null)
                 {
-                    // Update existing token
                     existingToken.IsActive = true;
                     existingToken.LastUsedAt = DateTime.UtcNow;
                     existingToken.DeviceType = request.DeviceType;
@@ -61,8 +76,7 @@ namespace sms.api.Controllers
                 }
                 else
                 {
-                    // Create new token
-                    var fcmToken = new FcmToken
+                    _context.FcmTokens.Add(new FcmToken
                     {
                         Id = Guid.NewGuid(),
                         UserId = userId,
@@ -72,13 +86,10 @@ namespace sms.api.Controllers
                         CreatedAt = DateTime.UtcNow,
                         LastUsedAt = DateTime.UtcNow,
                         IsActive = true
-                    };
-
-                    _context.FcmTokens.Add(fcmToken);
+                    });
                 }
 
                 await _context.SaveChangesAsync();
-
                 return Ok(new { message = "Token registered successfully" });
             }
             catch (Exception ex)
@@ -88,45 +99,136 @@ namespace sms.api.Controllers
             }
         }
 
-        /// <summary>
-        /// Send notification to specific user
-        /// </summary>
+        [HttpGet("inbox")]
+        public async Task<IActionResult> GetInbox([FromQuery] bool unreadOnly = false, [FromQuery] int page = 1, [FromQuery] int pageSize = 30)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var q = _context.InAppNotifications.AsNoTracking().Where(n => n.UserId == userId);
+            if (unreadOnly) q = q.Where(n => !n.IsRead);
+
+            var total = await q.CountAsync();
+            var unread = await _context.InAppNotifications.AsNoTracking()
+                .CountAsync(n => n.UserId == userId && !n.IsRead);
+
+            var items = await q
+                .OrderByDescending(n => n.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(n => new
+                {
+                    n.Id,
+                    n.Title,
+                    n.Body,
+                    n.Type,
+                    n.EntityType,
+                    n.EntityId,
+                    n.Severity,
+                    n.IsRead,
+                    n.CreatedAt,
+                    n.DataJson
+                })
+                .ToListAsync();
+
+            return Ok(new { items, total, unread, page, pageSize });
+        }
+
+        [HttpPost("inbox/{id:guid}/read")]
+        public async Task<IActionResult> MarkRead(Guid id)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var n = await _context.InAppNotifications.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId);
+            if (n == null) return NotFound();
+
+            n.IsRead = true;
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Marked as read" });
+        }
+
+        [HttpPost("inbox/read-all")]
+        public async Task<IActionResult> MarkAllRead()
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            await _context.InAppNotifications
+                .Where(n => n.UserId == userId && !n.IsRead)
+                .ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true));
+
+            return Ok(new { message = "All marked as read" });
+        }
+
+        [HttpGet("preferences")]
+        public async Task<IActionResult> GetPreferences()
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var prefs = await _context.UserNotificationPreferences
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.UserId == userId);
+
+            prefs ??= new UserNotificationPreference { UserId = userId };
+            return Ok(prefs);
+        }
+
+        [HttpPut("preferences")]
+        public async Task<IActionResult> UpdatePreferences([FromBody] UserNotificationPreference body)
+        {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized();
+
+            var prefs = await _context.UserNotificationPreferences.FirstOrDefaultAsync(p => p.UserId == userId);
+            if (prefs == null)
+            {
+                prefs = new UserNotificationPreference
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId
+                };
+                _context.UserNotificationPreferences.Add(prefs);
+            }
+
+            prefs.EnablePush = body.EnablePush;
+            prefs.EnableEmail = body.EnableEmail;
+            prefs.EnableSms = body.EnableSms;
+            prefs.EnableInApp = body.EnableInApp;
+            prefs.MuteApprovals = body.MuteApprovals;
+            prefs.MuteFees = body.MuteFees;
+            prefs.MuteAttendance = body.MuteAttendance;
+            prefs.MuteSystem = body.MuteSystem;
+            prefs.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return Ok(prefs);
+        }
+
         [HttpPost("send")]
         public async Task<IActionResult> SendNotification([FromBody] SendNotificationRequest request)
         {
             try
             {
-                var result = await _firebaseService.SendNotificationToUserWithStatusAsync(
-                    request.UserId,
-                    request.Title,
-                    request.Body,
-                    request.Data
-                );
-
-                if (result.SuccessTokenCount > 0)
+                var dispatch = await _orchestrator.NotifyAsync(new NotificationRequest
                 {
-                    return Ok(new
-                    {
-                        message = "Notification sent successfully",
-                        result.TargetUserCount,
-                        result.UsersWithActiveTokens,
-                        result.UsersWithoutActiveTokens,
-                        result.TargetTokenCount,
-                        result.SuccessTokenCount,
-                        result.FailureTokenCount
-                    });
-                }
-
-                return BadRequest(new
-                {
-                    message = "Failed to send notification",
-                    result.TargetUserCount,
-                    result.UsersWithActiveTokens,
-                    result.UsersWithoutActiveTokens,
-                    result.TargetTokenCount,
-                    result.SuccessTokenCount,
-                    result.FailureTokenCount
+                    UserIds = new List<Guid> { request.UserId },
+                    Title = request.Title,
+                    Body = request.Body,
+                    Type = request.Type ?? "manual",
+                    Category = "general",
+                    Channels = ParseChannels(request.Channels),
+                    Data = request.Data,
+                    SmsBody = request.SmsBody,
+                    EmailSubject = request.EmailSubject,
+                    EmailHtmlBody = request.EmailHtmlBody
                 });
+
+                return Ok(new { message = "Notification queued", dispatch });
             }
             catch (Exception ex)
             {
@@ -135,45 +237,26 @@ namespace sms.api.Controllers
             }
         }
 
-        /// <summary>
-        /// Send notification to multiple users
-        /// </summary>
         [HttpPost("send-multiple")]
         public async Task<IActionResult> SendNotificationToMultiple([FromBody] SendNotificationMultipleRequest request)
         {
             try
             {
-                var result = await _firebaseService.SendNotificationToMultipleUsersWithStatusAsync(
-                    request.UserIds,
-                    request.Title,
-                    request.Body,
-                    request.Data
-                );
-
-                if (result.SuccessTokenCount > 0)
+                var dispatch = await _orchestrator.NotifyAsync(new NotificationRequest
                 {
-                    return Ok(new
-                    {
-                        message = "Notifications sent successfully",
-                        result.TargetUserCount,
-                        result.UsersWithActiveTokens,
-                        result.UsersWithoutActiveTokens,
-                        result.TargetTokenCount,
-                        result.SuccessTokenCount,
-                        result.FailureTokenCount
-                    });
-                }
-
-                return BadRequest(new
-                {
-                    message = "Failed to send notifications",
-                    result.TargetUserCount,
-                    result.UsersWithActiveTokens,
-                    result.UsersWithoutActiveTokens,
-                    result.TargetTokenCount,
-                    result.SuccessTokenCount,
-                    result.FailureTokenCount
+                    UserIds = request.UserIds ?? new List<Guid>(),
+                    Title = request.Title,
+                    Body = request.Body,
+                    Type = request.Type ?? "manual",
+                    Category = "general",
+                    Channels = ParseChannels(request.Channels),
+                    Data = request.Data,
+                    SmsBody = request.SmsBody,
+                    EmailSubject = request.EmailSubject,
+                    EmailHtmlBody = request.EmailHtmlBody
                 });
+
+                return Ok(new { message = "Notifications queued", dispatch });
             }
             catch (Exception ex)
             {
@@ -182,45 +265,32 @@ namespace sms.api.Controllers
             }
         }
 
-        /// <summary>
-        /// Send notification to all users
-        /// </summary>
         [HttpPost("send-all")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> SendNotificationToAll([FromBody] SendNotificationAllRequest request)
         {
             try
             {
-                var result = await _firebaseService.SendNotificationToAllUsersWithStatusAsync(
-                    request.Title,
-                    request.Body,
-                    request.Data
-                );
+                var userIds = await _context.Users.AsNoTracking()
+                    .Where(u => u.IsActive)
+                    .Select(u => u.Id)
+                    .ToListAsync();
 
-                if (result.SuccessTokenCount > 0)
+                var dispatch = await _orchestrator.NotifyAsync(new NotificationRequest
                 {
-                    return Ok(new
-                    {
-                        message = "Notifications sent successfully",
-                        result.TargetUserCount,
-                        result.UsersWithActiveTokens,
-                        result.UsersWithoutActiveTokens,
-                        result.TargetTokenCount,
-                        result.SuccessTokenCount,
-                        result.FailureTokenCount
-                    });
-                }
-
-                return BadRequest(new
-                {
-                    message = "Failed to send notifications",
-                    result.TargetUserCount,
-                    result.UsersWithActiveTokens,
-                    result.UsersWithoutActiveTokens,
-                    result.TargetTokenCount,
-                    result.SuccessTokenCount,
-                    result.FailureTokenCount
+                    UserIds = userIds,
+                    Title = request.Title,
+                    Body = request.Body,
+                    Type = request.Type ?? "manual.broadcast",
+                    Category = "general",
+                    Channels = ParseChannels(request.Channels),
+                    Data = request.Data,
+                    SmsBody = request.SmsBody,
+                    EmailSubject = request.EmailSubject,
+                    EmailHtmlBody = request.EmailHtmlBody
                 });
+
+                return Ok(new { message = "Broadcast queued", dispatch });
             }
             catch (Exception ex)
             {
@@ -229,19 +299,13 @@ namespace sms.api.Controllers
             }
         }
 
-        /// <summary>
-        /// Get user's FCM tokens
-        /// </summary>
         [HttpGet("tokens")]
         public async Task<IActionResult> GetUserTokens()
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
-                {
+                if (!TryGetUserId(out var userId))
                     return Unauthorized();
-                }
 
                 var tokens = await _context.FcmTokens
                     .Where(t => t.UserId == userId && t.IsActive)
@@ -264,31 +328,22 @@ namespace sms.api.Controllers
             }
         }
 
-        /// <summary>
-        /// Remove FCM token
-        /// </summary>
         [HttpDelete("token/{tokenId}")]
         public async Task<IActionResult> RemoveToken(Guid tokenId)
         {
             try
             {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
-                {
+                if (!TryGetUserId(out var userId))
                     return Unauthorized();
-                }
 
                 var token = await _context.FcmTokens
                     .FirstOrDefaultAsync(t => t.Id == tokenId && t.UserId == userId);
 
                 if (token == null)
-                {
                     return NotFound(new { message = "Token not found" });
-                }
 
                 token.IsActive = false;
                 await _context.SaveChangesAsync();
-
                 return Ok(new { message = "Token removed successfully" });
             }
             catch (Exception ex)
@@ -299,7 +354,6 @@ namespace sms.api.Controllers
         }
     }
 
-    // DTOs
     public class RegisterTokenRequest
     {
         public string Token { get; set; } = string.Empty;
@@ -307,11 +361,24 @@ namespace sms.api.Controllers
         public string? DeviceInfo { get; set; }
     }
 
+    public class SendChannelsDto
+    {
+        public bool InApp { get; set; } = true;
+        public bool Push { get; set; } = true;
+        public bool Email { get; set; } = true;
+        public bool Sms { get; set; } = false;
+    }
+
     public class SendNotificationRequest
     {
         public Guid UserId { get; set; }
         public string Title { get; set; } = string.Empty;
         public string Body { get; set; } = string.Empty;
+        public string? Type { get; set; }
+        public string? SmsBody { get; set; }
+        public string? EmailSubject { get; set; }
+        public string? EmailHtmlBody { get; set; }
+        public SendChannelsDto? Channels { get; set; }
         public Dictionary<string, string>? Data { get; set; }
     }
 
@@ -320,6 +387,11 @@ namespace sms.api.Controllers
         public List<Guid> UserIds { get; set; } = new();
         public string Title { get; set; } = string.Empty;
         public string Body { get; set; } = string.Empty;
+        public string? Type { get; set; }
+        public string? SmsBody { get; set; }
+        public string? EmailSubject { get; set; }
+        public string? EmailHtmlBody { get; set; }
+        public SendChannelsDto? Channels { get; set; }
         public Dictionary<string, string>? Data { get; set; }
     }
 
@@ -327,6 +399,11 @@ namespace sms.api.Controllers
     {
         public string Title { get; set; } = string.Empty;
         public string Body { get; set; } = string.Empty;
+        public string? Type { get; set; }
+        public string? SmsBody { get; set; }
+        public string? EmailSubject { get; set; }
+        public string? EmailHtmlBody { get; set; }
+        public SendChannelsDto? Channels { get; set; }
         public Dictionary<string, string>? Data { get; set; }
     }
 }

@@ -9,14 +9,17 @@ using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
 using sms.api.Models;
 using sms.api.Models.DTOs;
+using sms.api.Services;
 
 namespace sms.api.Managers.Student
 {
     public class StudentLeaveManager : GenericManager<StudentLeave>, IStudentLeaveManager
     {
+        private readonly INotificationOrchestrator? _notify;
 
-        public StudentLeaveManager(ApplicationDbContext context) : base(context)
+        public StudentLeaveManager(ApplicationDbContext context, INotificationOrchestrator? notify = null) : base(context)
         {
+            _notify = notify;
         }
 
         public override async Task<IEnumerable<StudentLeave>> GetAllAsync()
@@ -65,13 +68,11 @@ namespace sms.api.Managers.Student
 
         public async Task<IEnumerable<StudentLeave>> GetPendingLeavesForTeacherAsync(Guid teacherId)
         {
-            // Get all classes assigned to this teacher
             var teacherClasses = await _context.Classes
                 .Where(c => c.TeacherId == teacherId)
                 .Select(c => c.Id)
                 .ToListAsync();
 
-            // Get all pending leaves for students in these classes
             return await _dbSet
                 .Include(sl => sl.Student)
                     .ThenInclude(s => s.User)
@@ -93,6 +94,23 @@ namespace sms.api.Managers.Student
             leave.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            var userId = leave.Student?.UserId ?? await NotificationEvents.GetStudentUserIdAsync(_context, leave.StudentId);
+            if (userId.HasValue)
+            {
+                await NotificationEvents.NotifyUsersAsync(
+                    _notify,
+                    new[] { userId.Value },
+                    "Leave approved",
+                    $"Your leave from {leave.StartDate:dd MMM} to {leave.EndDate:dd MMM} was approved.",
+                    "leave.approved",
+                    "approvals",
+                    NotificationChannels.All,
+                    leave.Id,
+                    "StudentLeave",
+                    "success",
+                    idempotencyKey: $"leave.approved:{leave.Id}");
+            }
             return true;
         }
 
@@ -109,12 +127,28 @@ namespace sms.api.Managers.Student
             leave.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            var userId = leave.Student?.UserId ?? await NotificationEvents.GetStudentUserIdAsync(_context, leave.StudentId);
+            if (userId.HasValue)
+            {
+                await NotificationEvents.NotifyUsersAsync(
+                    _notify,
+                    new[] { userId.Value },
+                    "Leave rejected",
+                    $"Your leave request was rejected. {reason}",
+                    "leave.rejected",
+                    "approvals",
+                    NotificationChannels.All,
+                    leave.Id,
+                    "StudentLeave",
+                    "warning",
+                    idempotencyKey: $"leave.rejected:{leave.Id}");
+            }
             return true;
         }
 
         public async Task<StudentLeave> CreateStudentLeaveAsync(CreateStudentLeaveDTO leaveDto)
         {
-            // Get the student's class if not provided
             if (!leaveDto.ClassId.HasValue)
             {
                 var classEnrollment = await _context.ClassEnrollments
@@ -140,7 +174,24 @@ namespace sms.api.Managers.Student
                 CreatedAt = DateTime.UtcNow
             };
 
-            return await CreateAsync(leave);
+            var created = await CreateAsync(leave);
+
+            var teachers = await NotificationEvents.GetClassTeacherUserIdsAsync(_context, leave.ClassId);
+            var admins = await NotificationEvents.GetAdminUserIdsAsync(_context);
+            var recipients = teachers.Concat(admins).Distinct().ToList();
+            await NotificationEvents.NotifyUsersAsync(
+                _notify,
+                recipients,
+                "New student leave request",
+                $"A student leave request needs approval ({leave.StartDate:dd MMM} – {leave.EndDate:dd MMM}).",
+                "leave.created",
+                "approvals",
+                NotificationChannels.InApp | NotificationChannels.Push | NotificationChannels.Email,
+                leave.Id,
+                "StudentLeave",
+                "info");
+
+            return created;
         }
     }
 }

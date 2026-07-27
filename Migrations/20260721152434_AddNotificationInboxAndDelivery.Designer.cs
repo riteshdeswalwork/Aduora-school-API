@@ -12,8 +12,8 @@ using sms.api.Data;
 namespace sms.api.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260330154906_AddTimetableEntryScheduleDateColumn")]
-    partial class AddTimetableEntryScheduleDateColumn
+    [Migration("20260721152434_AddNotificationInboxAndDelivery")]
+    partial class AddNotificationInboxAndDelivery
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -725,14 +725,71 @@ namespace sms.api.Migrations
                     b.ToTable("BiometricDevices");
                 });
 
+            modelBuilder.Entity("sms.api.Models.BiometricFingerTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FingerCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("FingerIndex")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("IsoTemplate")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PersonType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("Quality")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("StaffId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("StudentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("BiometricFingerTemplates");
+                });
+
             modelBuilder.Entity("sms.api.Models.BiometricLog", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("AttendanceApplied")
+                        .HasColumnType("bit");
+
                     b.Property<Guid?>("DeviceId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ExternalUserId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -761,6 +818,55 @@ namespace sms.api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("BiometricLogs");
+                });
+
+            modelBuilder.Entity("sms.api.Models.BiometricUserMap", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ExternalUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PersonType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<Guid?>("StaffId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("StudentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("BiometricUserMaps");
                 });
 
             modelBuilder.Entity("sms.api.Models.Book", b =>
@@ -2185,6 +2291,9 @@ namespace sms.api.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPresent")
                         .HasColumnType("bit");
 
                     b.Property<string>("Remarks")
@@ -3631,6 +3740,9 @@ namespace sms.api.Migrations
                     b.Property<Guid?>("FeeHistoryByYearId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("IsVoided")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("PaymentDate")
                         .HasColumnType("datetime2");
 
@@ -3662,6 +3774,17 @@ namespace sms.api.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("VoidReason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("VoidedById")
+                        .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
 
@@ -3702,6 +3825,9 @@ namespace sms.api.Migrations
                     b.Property<Guid>("IssuedById")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("LastReprintAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid>("PaymentId")
                         .HasColumnType("uniqueidentifier");
 
@@ -3709,6 +3835,9 @@ namespace sms.api.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("ReprintCount")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -3757,6 +3886,9 @@ namespace sms.api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int?>("InstallmentCount")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -3775,6 +3907,50 @@ namespace sms.api.Migrations
                     b.HasIndex("ClassId");
 
                     b.ToTable("FeeStructures");
+                });
+
+            modelBuilder.Entity("sms.api.Models.FeeStructureLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("DefaultConcessionPercent")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<Guid>("FeeStructureId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("LineCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeeStructureId");
+
+                    b.ToTable("FeeStructureLines");
                 });
 
             modelBuilder.Entity("sms.api.Models.GalleryMedia", b =>
@@ -4106,6 +4282,59 @@ namespace sms.api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("HostelRooms");
+                });
+
+            modelBuilder.Entity("sms.api.Models.InAppNotification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DataJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<Guid?>("EntityId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EntityType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("InAppNotifications");
                 });
 
             modelBuilder.Entity("sms.api.Models.InventoryItem", b =>
@@ -4667,6 +4896,50 @@ namespace sms.api.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("LibraryMembers");
+                });
+
+            modelBuilder.Entity("sms.api.Models.NotificationDeliveryLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("NotificationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Type")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NotificationId");
+
+                    b.ToTable("NotificationDeliveryLogs");
                 });
 
             modelBuilder.Entity("sms.api.Models.OnlineClass", b =>
@@ -5376,6 +5649,9 @@ namespace sms.api.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("DataScope")
+                        .HasColumnType("int");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -5770,6 +6046,11 @@ namespace sms.api.Migrations
 
                     b.Property<Guid>("StaffId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.HasKey("Id");
 
@@ -6256,6 +6537,12 @@ namespace sms.api.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("BillingPeriodMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("BillingPeriodYear")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -6268,6 +6555,12 @@ namespace sms.api.Migrations
                     b.Property<Guid>("FeeStructureId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("FeeStructureLineId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("InstallmentSequence")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("OutstandingAmount")
                         .HasColumnType("decimal(18,2)");
 
@@ -6278,6 +6571,11 @@ namespace sms.api.Migrations
                         .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -6298,6 +6596,8 @@ namespace sms.api.Migrations
                     b.HasIndex("AcademicYearId");
 
                     b.HasIndex("FeeStructureId");
+
+                    b.HasIndex("FeeStructureLineId");
 
                     b.HasIndex("StudentId");
 
@@ -6766,6 +7066,49 @@ namespace sms.api.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("sms.api.Models.UserNotificationPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("EnableEmail")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableInApp")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnablePush")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("EnableSms")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("MuteApprovals")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("MuteAttendance")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("MuteFees")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("MuteSystem")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserNotificationPreferences");
+                });
+
             modelBuilder.Entity("sms.api.Models.UserRole", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6945,8 +7288,18 @@ namespace sms.api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("PatternType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("WeekOccurrences")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.HasKey("Id");
 
@@ -7176,6 +7529,42 @@ namespace sms.api.Migrations
                         .IsRequired();
 
                     b.Navigation("CreatedBy");
+                });
+
+            modelBuilder.Entity("sms.api.Models.BiometricFingerTemplate", b =>
+                {
+                    b.HasOne("sms.api.Models.Staff", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId");
+
+                    b.HasOne("sms.api.Models.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId");
+
+                    b.Navigation("Staff");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("sms.api.Models.BiometricUserMap", b =>
+                {
+                    b.HasOne("sms.api.Models.BiometricDevice", "Device")
+                        .WithMany()
+                        .HasForeignKey("DeviceId");
+
+                    b.HasOne("sms.api.Models.Staff", "Staff")
+                        .WithMany()
+                        .HasForeignKey("StaffId");
+
+                    b.HasOne("sms.api.Models.Student", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId");
+
+                    b.Navigation("Device");
+
+                    b.Navigation("Staff");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("sms.api.Models.Book", b =>
@@ -8073,6 +8462,17 @@ namespace sms.api.Migrations
                     b.Navigation("Class");
                 });
 
+            modelBuilder.Entity("sms.api.Models.FeeStructureLine", b =>
+                {
+                    b.HasOne("sms.api.Models.FeeStructure", "FeeStructure")
+                        .WithMany("Lines")
+                        .HasForeignKey("FeeStructureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FeeStructure");
+                });
+
             modelBuilder.Entity("sms.api.Models.Holiday", b =>
                 {
                     b.HasOne("sms.api.Models.AcademicYear", "AcademicYear")
@@ -8090,6 +8490,17 @@ namespace sms.api.Migrations
                     b.Navigation("AcademicYear");
 
                     b.Navigation("CreatedBy");
+                });
+
+            modelBuilder.Entity("sms.api.Models.InAppNotification", b =>
+                {
+                    b.HasOne("sms.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("sms.api.Models.LibraryFine", b =>
@@ -8177,6 +8588,15 @@ namespace sms.api.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("sms.api.Models.NotificationDeliveryLog", b =>
+                {
+                    b.HasOne("sms.api.Models.InAppNotification", "Notification")
+                        .WithMany()
+                        .HasForeignKey("NotificationId");
+
+                    b.Navigation("Notification");
                 });
 
             modelBuilder.Entity("sms.api.Models.OnlineClass", b =>
@@ -8548,6 +8968,11 @@ namespace sms.api.Migrations
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
 
+                    b.HasOne("sms.api.Models.FeeStructureLine", "FeeStructureLine")
+                        .WithMany("StudentFees")
+                        .HasForeignKey("FeeStructureLineId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("sms.api.Models.Student", "Student")
                         .WithMany()
                         .HasForeignKey("StudentId")
@@ -8557,6 +8982,8 @@ namespace sms.api.Migrations
                     b.Navigation("AcademicYear");
 
                     b.Navigation("FeeStructure");
+
+                    b.Navigation("FeeStructureLine");
 
                     b.Navigation("Student");
                 });
@@ -8698,6 +9125,17 @@ namespace sms.api.Migrations
                         .HasForeignKey("StudentId");
 
                     b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("sms.api.Models.UserNotificationPreference", b =>
+                {
+                    b.HasOne("sms.api.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("sms.api.Models.UserRole", b =>
@@ -8843,6 +9281,13 @@ namespace sms.api.Migrations
                 });
 
             modelBuilder.Entity("sms.api.Models.FeeStructure", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("StudentFees");
+                });
+
+            modelBuilder.Entity("sms.api.Models.FeeStructureLine", b =>
                 {
                     b.Navigation("StudentFees");
                 });

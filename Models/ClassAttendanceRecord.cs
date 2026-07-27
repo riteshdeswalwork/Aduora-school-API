@@ -20,7 +20,8 @@ namespace sms.api.Models
         [StringLength(20)]
         public string Status { get; set; } = "Present"; // Present, Absent, Late, HalfDay
 
-        public bool IsPresent => Status == "Present";
+        /// <summary>Legacy DB column — keep in sync with Status for older schema.</summary>
+        public bool IsPresent { get; set; } = true;
 
         public Guid? AcademicYearId { get; set; }
         public virtual AcademicYear? AcademicYear { get; set; }

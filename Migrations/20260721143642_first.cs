@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace sms.api.Migrations
 {
     /// <inheritdoc />
-    public partial class frist : Migration
+    public partial class first : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -121,6 +121,8 @@ namespace sms.api.Migrations
                     LoggedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     LogType = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: false),
                     RawData = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    ExternalUserId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    AttendanceApplied = table.Column<bool>(type: "bit", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
@@ -1119,6 +1121,7 @@ namespace sms.api.Migrations
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    DataScope = table.Column<int>(type: "int", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
                     IsSystemRole = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -1473,6 +1476,8 @@ namespace sms.api.Migrations
                     AcademicYearId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     EffectiveFrom = table.Column<DateTime>(type: "datetime2", nullable: false),
                     EffectiveTo = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    PatternType = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    WeekOccurrences = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     CreatedByUserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
@@ -1888,6 +1893,7 @@ namespace sms.api.Migrations
                     AcademicYearId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Date = table.Column<DateTime>(type: "datetime2", nullable: false),
                     IsPresent = table.Column<bool>(type: "bit", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     Remarks = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     CheckInTime = table.Column<DateTime>(type: "datetime2", nullable: true),
                     CheckOutTime = table.Column<DateTime>(type: "datetime2", nullable: true)
@@ -2324,6 +2330,7 @@ namespace sms.api.Migrations
                     AcademicYear = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     AcademicYearId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    InstallmentCount = table.Column<int>(type: "int", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ClassId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
@@ -2804,6 +2811,32 @@ namespace sms.api.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "FeeStructureLines",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    FeeStructureId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    LineCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(120)", maxLength: 120, nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    SortOrder = table.Column<int>(type: "int", nullable: false),
+                    DefaultConcessionPercent = table.Column<decimal>(type: "decimal(5,2)", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_FeeStructureLines", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_FeeStructureLines_FeeStructures_FeeStructureId",
+                        column: x => x.FeeStructureId,
+                        principalTable: "FeeStructures",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "ClassMessages",
                 columns: table => new
                 {
@@ -2964,6 +2997,72 @@ namespace sms.api.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "BiometricFingerTemplates",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    PersonType = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    StaffId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    FingerIndex = table.Column<int>(type: "int", nullable: false),
+                    FingerCode = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    IsoTemplate = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Quality = table.Column<int>(type: "int", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_BiometricFingerTemplates", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_BiometricFingerTemplates_Staff_StaffId",
+                        column: x => x.StaffId,
+                        principalTable: "Staff",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_BiometricFingerTemplates_Students_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "Students",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "BiometricUserMaps",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    DeviceId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    ExternalUserId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    PersonType = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    StaffId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    StudentId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    DisplayName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_BiometricUserMaps", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_BiometricUserMaps_BiometricDevices_DeviceId",
+                        column: x => x.DeviceId,
+                        principalTable: "BiometricDevices",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_BiometricUserMaps_Staff_StaffId",
+                        column: x => x.StaffId,
+                        principalTable: "Staff",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_BiometricUserMaps_Students_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "Students",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "ClassAttendanceRecords",
                 columns: table => new
                 {
@@ -2971,6 +3070,7 @@ namespace sms.api.Migrations
                     ClassAttendanceId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     StudentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    IsPresent = table.Column<bool>(type: "bit", nullable: false),
                     AcademicYearId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     Remarks = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
@@ -3271,46 +3371,6 @@ namespace sms.api.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "StudentFees",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    StudentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    FeeStructureId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    AcademicYearId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    TotalAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    PaidAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    DiscountAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    OutstandingAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    DueDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    Remarks = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_StudentFees", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_StudentFees_AcademicYears_AcademicYearId",
-                        column: x => x.AcademicYearId,
-                        principalTable: "AcademicYears",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_StudentFees_FeeStructures_FeeStructureId",
-                        column: x => x.FeeStructureId,
-                        principalTable: "FeeStructures",
-                        principalColumn: "Id");
-                    table.ForeignKey(
-                        name: "FK_StudentFees_Students_StudentId",
-                        column: x => x.StudentId,
-                        principalTable: "Students",
-                        principalColumn: "Id");
-                });
-
-            migrationBuilder.CreateTable(
                 name: "StudentLeaves",
                 columns: table => new
                 {
@@ -3427,6 +3487,56 @@ namespace sms.api.Migrations
                     table.PrimaryKey("PK_TransferCertificates", x => x.Id);
                     table.ForeignKey(
                         name: "FK_TransferCertificates_Students_StudentId",
+                        column: x => x.StudentId,
+                        principalTable: "Students",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "StudentFees",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    StudentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    FeeStructureId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    FeeStructureLineId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    AcademicYearId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TotalAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    PaidAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    DiscountAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    OutstandingAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    DueDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Status = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Remarks = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    BillingPeriodYear = table.Column<int>(type: "int", nullable: true),
+                    BillingPeriodMonth = table.Column<int>(type: "int", nullable: true),
+                    InstallmentSequence = table.Column<int>(type: "int", nullable: true),
+                    Source = table.Column<string>(type: "nvarchar(40)", maxLength: 40, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_StudentFees", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_StudentFees_AcademicYears_AcademicYearId",
+                        column: x => x.AcademicYearId,
+                        principalTable: "AcademicYears",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_StudentFees_FeeStructureLines_FeeStructureLineId",
+                        column: x => x.FeeStructureLineId,
+                        principalTable: "FeeStructureLines",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_StudentFees_FeeStructures_FeeStructureId",
+                        column: x => x.FeeStructureId,
+                        principalTable: "FeeStructures",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_StudentFees_Students_StudentId",
                         column: x => x.StudentId,
                         principalTable: "Students",
                         principalColumn: "Id");
@@ -3687,6 +3797,10 @@ namespace sms.api.Migrations
                     ReceivedById = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsVoided = table.Column<bool>(type: "bit", nullable: false),
+                    VoidedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    VoidedById = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    VoidReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     FeeHistoryByYearId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
                 },
                 constraints: table =>
@@ -3728,7 +3842,9 @@ namespace sms.api.Migrations
                     Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
                     IssuedById = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ReprintCount = table.Column<int>(type: "int", nullable: false),
+                    LastReprintAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -3836,6 +3952,31 @@ namespace sms.api.Migrations
                 name: "IX_Authors_CreatedByUserId",
                 table: "Authors",
                 column: "CreatedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BiometricFingerTemplates_StaffId",
+                table: "BiometricFingerTemplates",
+                column: "StaffId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BiometricFingerTemplates_StudentId",
+                table: "BiometricFingerTemplates",
+                column: "StudentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BiometricUserMaps_DeviceId",
+                table: "BiometricUserMaps",
+                column: "DeviceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BiometricUserMaps_StaffId",
+                table: "BiometricUserMaps",
+                column: "StaffId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_BiometricUserMaps_StudentId",
+                table: "BiometricUserMaps",
+                column: "StudentId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_BookAuthors_AuthorId",
@@ -4406,6 +4547,11 @@ namespace sms.api.Migrations
                 column: "PaymentId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_FeeStructureLines_FeeStructureId",
+                table: "FeeStructureLines",
+                column: "FeeStructureId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_FeeStructures_AcademicYearId",
                 table: "FeeStructures",
                 column: "AcademicYearId");
@@ -4714,6 +4860,11 @@ namespace sms.api.Migrations
                 column: "FeeStructureId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_StudentFees_FeeStructureLineId",
+                table: "StudentFees",
+                column: "FeeStructureLineId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_StudentFees_StudentId",
                 table: "StudentFees",
                 column: "StudentId");
@@ -4882,10 +5033,13 @@ namespace sms.api.Migrations
                 name: "Attendances");
 
             migrationBuilder.DropTable(
-                name: "BiometricDevices");
+                name: "BiometricFingerTemplates");
 
             migrationBuilder.DropTable(
                 name: "BiometricLogs");
+
+            migrationBuilder.DropTable(
+                name: "BiometricUserMaps");
 
             migrationBuilder.DropTable(
                 name: "BookAuthors");
@@ -5068,6 +5222,9 @@ namespace sms.api.Migrations
                 name: "Courses");
 
             migrationBuilder.DropTable(
+                name: "BiometricDevices");
+
+            migrationBuilder.DropTable(
                 name: "Authors");
 
             migrationBuilder.DropTable(
@@ -5116,7 +5273,7 @@ namespace sms.api.Migrations
                 name: "StudentAcademicHistories");
 
             migrationBuilder.DropTable(
-                name: "FeeStructures");
+                name: "FeeStructureLines");
 
             migrationBuilder.DropTable(
                 name: "BookCategories");
@@ -5126,6 +5283,9 @@ namespace sms.api.Migrations
 
             migrationBuilder.DropTable(
                 name: "Students");
+
+            migrationBuilder.DropTable(
+                name: "FeeStructures");
 
             migrationBuilder.DropTable(
                 name: "BusStops");

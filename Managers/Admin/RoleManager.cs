@@ -3,16 +3,19 @@ using sms.api.Constants;
 using sms.api.Data;
 using sms.api.Interfaces.Admin;
 using sms.api.Models;
+using sms.api.Services;
 
 namespace sms.api.Managers.Admin
 {
     public class RoleManager : IRoleManager
     {
         private readonly ApplicationDbContext _context;
+        private readonly INotificationOrchestrator? _notify;
 
-        public RoleManager(ApplicationDbContext context)
+        public RoleManager(ApplicationDbContext context, INotificationOrchestrator? notify = null)
         {
             _context = context;
+            _notify = notify;
         }
 
         public async Task<IEnumerable<Role>> GetRolesAsync(bool includeInactive = false)
@@ -133,6 +136,20 @@ namespace sms.api.Managers.Admin
                 });
             }
             await _context.SaveChangesAsync();
+
+            await NotificationEvents.NotifyUsersAsync(
+                _notify,
+                Enumerable.Empty<Guid>(),
+                "Role permissions updated",
+                $"Permissions were updated for role \"{role.Name}\" ({permissionIds.Count} permission(s)).",
+                "role.permissions.changed",
+                "system",
+                NotificationChannels.InApp | NotificationChannels.Push | NotificationChannels.Email,
+                roleId,
+                "Role",
+                includeAdmins: true,
+                idempotencyKey: $"role.permissions.changed:{roleId}:{DateTime.UtcNow:yyyyMMddHHmm}");
+
             return true;
         }
     }

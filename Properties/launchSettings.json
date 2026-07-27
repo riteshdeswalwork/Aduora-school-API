@@ -7,7 +7,8 @@
       "launchBrowser": true,
       "applicationUrl": "http://localhost:5238",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "FIREBASE_CONFIG_PATH": "C:\\Users\\rites\\Downloads\\aduora-school-firebase-adminsdk-fbsvc-c4b8aead76.json"
       }
     },
     "https": {
@@ -16,7 +17,8 @@
       "launchBrowser": true,
       "applicationUrl": "https://localhost:7238;http://localhost:5238",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "FIREBASE_CONFIG_PATH": "C:\\Users\\rites\\Downloads\\aduora-school-firebase-adminsdk-fbsvc-c4b8aead76.json"
       }
     }
   }

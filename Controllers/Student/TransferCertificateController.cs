@@ -6,6 +6,7 @@ using sms.api.Data;
 using sms.api.Interfaces.Student;
 using sms.api.Models;
 using sms.api.Models.DTOs;
+using sms.api.Services;
 using sms.api.Utils;
 
 namespace sms.api.Controllers.Student
@@ -16,11 +17,13 @@ namespace sms.api.Controllers.Student
     {
         private readonly ApplicationDbContext _context;
         private readonly ITransferCertificateManager _manager;
+        private readonly INotificationOrchestrator? _notify;
 
-        public TransferCertificateController(ApplicationDbContext context, ITransferCertificateManager manager)
+        public TransferCertificateController(ApplicationDbContext context, ITransferCertificateManager manager, INotificationOrchestrator? notify = null)
         {
             _context = context;
             _manager = manager;
+            _notify = notify;
         }
 
         private static IQueryable<TransferCertificate> ApplyIncludes(IQueryable<TransferCertificate> q) =>
@@ -130,6 +133,7 @@ namespace sms.api.Controllers.Student
             var existing = await _context.TransferCertificates.FindAsync(id);
             if (existing == null) return NotFound(new { message = "Transfer certificate not found" });
 
+            var priorStatus = existing.Status;
             MapDtoToEntity(dto, existing);
             existing.UpdatedAt = DateTime.UtcNow;
             if (string.Equals(dto.Status, "Approved", StringComparison.OrdinalIgnoreCase) && !existing.ApprovedAt.HasValue)
@@ -138,6 +142,7 @@ namespace sms.api.Controllers.Student
                 existing.ApprovedByUserId = GetCurrentUserId();
             }
             await _context.SaveChangesAsync();
+            await NotifyStatusChangeAsync(existing, priorStatus);
             return Ok(await ApplyIncludes(_context.TransferCertificates.AsNoTracking().Where(x => x.Id == id)).FirstOrDefaultAsync());
         }
 
@@ -152,7 +157,48 @@ namespace sms.api.Controllers.Student
             existing.ApprovedByUserId = GetCurrentUserId();
             existing.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+            await NotifyStatusChangeAsync(existing, "Pending");
             return Ok(existing);
+        }
+
+        private async Task NotifyStatusChangeAsync(TransferCertificate tc, string? priorStatus)
+        {
+            if (tc.StudentId == null) return;
+            if (string.Equals(tc.Status, priorStatus, StringComparison.OrdinalIgnoreCase)) return;
+
+            var studentUserId = await NotificationEvents.GetStudentUserIdAsync(_context, tc.StudentId.Value);
+            if (!studentUserId.HasValue) return;
+
+            if (string.Equals(tc.Status, "Approved", StringComparison.OrdinalIgnoreCase))
+            {
+                await NotificationEvents.NotifyUsersAsync(
+                    _notify,
+                    new[] { studentUserId.Value },
+                    "Transfer certificate approved",
+                    $"Your transfer certificate ({tc.TcNumber ?? "TC"}) has been approved.",
+                    "tc.approved",
+                    "approvals",
+                    NotificationChannels.All,
+                    tc.Id,
+                    "TransferCertificate",
+                    "success",
+                    idempotencyKey: $"tc.approved:{tc.Id}");
+            }
+            else if (string.Equals(tc.Status, "Rejected", StringComparison.OrdinalIgnoreCase))
+            {
+                await NotificationEvents.NotifyUsersAsync(
+                    _notify,
+                    new[] { studentUserId.Value },
+                    "Transfer certificate rejected",
+                    $"Your transfer certificate request was rejected. {tc.Remarks}".Trim(),
+                    "tc.rejected",
+                    "approvals",
+                    NotificationChannels.All,
+                    tc.Id,
+                    "TransferCertificate",
+                    "warning",
+                    idempotencyKey: $"tc.rejected:{tc.Id}");
+            }
         }
 
         [HttpDelete("{id}")]

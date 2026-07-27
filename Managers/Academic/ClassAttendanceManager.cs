@@ -9,14 +9,17 @@ using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
 using sms.api.Models;
 using sms.api.Models.DTOs;
+using sms.api.Services;
 
 namespace sms.api.Managers.Academic
 {
     public class ClassAttendanceManager : GenericManager<ClassAttendance>, IClassAttendanceManager
     {
+        private readonly INotificationOrchestrator? _notify;
 
-        public ClassAttendanceManager(ApplicationDbContext context) : base(context)
+        public ClassAttendanceManager(ApplicationDbContext context, INotificationOrchestrator? notify = null) : base(context)
         {
+            _notify = notify;
         }
 
         public override async Task<IEnumerable<ClassAttendance>> GetAllAsync()
@@ -133,7 +136,10 @@ namespace sms.api.Managers.Academic
                     ClassAttendanceId = classAttendance.Id,
                     StudentId = recordDto.StudentId,
                     Status = recordDto.Status,
-                    Remarks = recordDto.Remarks
+                    IsPresent = string.Equals(recordDto.Status, "Present", StringComparison.OrdinalIgnoreCase),
+                    Remarks = recordDto.Remarks,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 classAttendance.AttendanceRecords.Add(record);
@@ -141,6 +147,12 @@ namespace sms.api.Managers.Academic
 
             await _dbSet.AddAsync(classAttendance);
             await _context.SaveChangesAsync();
+
+            foreach (var record in classAttendance.AttendanceRecords)
+            {
+                if (ShouldNotifyAttendanceStatus(record.Status))
+                    await NotifyAttendanceStatusAsync(record.StudentId, classAttendance.Date, record.Status, record.Id);
+            }
 
             return await GetClassAttendanceByIdWithRecordsAsync(classAttendance.Id);
         }
@@ -160,7 +172,9 @@ namespace sms.api.Managers.Academic
                 return false;
 
             record.Status = status;
+            record.IsPresent = string.Equals(status, "Present", StringComparison.OrdinalIgnoreCase);
             record.Remarks = remarks;
+            record.UpdatedAt = DateTime.UtcNow;
 
             // Update the parent attendance's UpdatedAt field
             var attendance = await _dbSet.FindAsync(record.ClassAttendanceId);
@@ -170,7 +184,36 @@ namespace sms.api.Managers.Academic
             }
 
             await _context.SaveChangesAsync();
+
+            if (ShouldNotifyAttendanceStatus(status))
+                await NotifyAttendanceStatusAsync(record.StudentId, attendance?.Date ?? DateTime.UtcNow.Date, status, record.Id);
+
             return true;
+        }
+
+        private static bool ShouldNotifyAttendanceStatus(string? status) =>
+            string.Equals(status, "Absent", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "Late", StringComparison.OrdinalIgnoreCase);
+
+        private async Task NotifyAttendanceStatusAsync(Guid studentId, DateTime date, string status, Guid recordId)
+        {
+            var studentUserId = await NotificationEvents.GetStudentUserIdAsync(_context, studentId);
+            if (!studentUserId.HasValue) return;
+
+            var label = status.Equals("Late", StringComparison.OrdinalIgnoreCase) ? "Late" : "Absent";
+            await NotificationEvents.NotifyUsersAsync(
+                _notify,
+                new[] { studentUserId.Value },
+                $"Marked {label} — {date:dd MMM}",
+                $"You were marked {label.ToLower()} for class on {date:dd MMM yyyy}.",
+                "attendance.status",
+                "attendance",
+                NotificationChannels.Sms | NotificationChannels.Push | NotificationChannels.InApp,
+                recordId,
+                "ClassAttendanceRecord",
+                "warning",
+                smsBody: $"Attendance: {label} on {date:dd/MM}.",
+                idempotencyKey: $"attendance.{studentId}.{date:yyyyMMdd}.{status.ToLowerInvariant()}");
         }
     }
 }

@@ -21,6 +21,13 @@ namespace sms.api.Models
         [StringLength(500)]
         public string? RawData { get; set; }
 
+        /// <summary>Fingerprint device user id that matched.</summary>
+        [StringLength(100)]
+        public string? ExternalUserId { get; set; }
+
+        /// <summary>True when this punch also wrote staff/student attendance for the day.</summary>
+        public bool AttendanceApplied { get; set; }
+
         public bool IsActive { get; set; } = true;
     }
 }

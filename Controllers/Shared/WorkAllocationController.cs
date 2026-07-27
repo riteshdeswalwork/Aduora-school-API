@@ -103,13 +103,9 @@ namespace sms.api.Controllers.Shared
         [HttpPut("{id}/complete")]
         public async Task<IActionResult> Complete(Guid id)
         {
-            var existing = await _context.WorkAllocations.FindAsync(id);
+            var existing = await _manager.CompleteAsync(id);
             if (existing == null) return NotFound(new { message = "Work allocation not found" });
             if (!existing.IsActive) return BadRequest(new { message = "Work allocation is inactive" });
-            existing.Status = "Completed";
-            existing.CompletedAt = DateTime.UtcNow;
-            existing.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
             return Ok(existing);
         }
 

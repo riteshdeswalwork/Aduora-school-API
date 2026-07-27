@@ -13,6 +13,7 @@ namespace sms.api.Interfaces.Shared
         Task<Announcement?> GetByIdAsync(Guid id);
         Task<Announcement> CreateAsync(Announcement announcement);
         Task<Announcement> UpdateAsync(Announcement announcement);
+        Task<Announcement?> SetPublishedAsync(Guid id, bool isPublished);
         Task<bool> DeleteAsync(Guid id);
         Task<IEnumerable<Announcement>> GetByCategoryAsync(string category);
         Task<IEnumerable<Announcement>> GetByPriorityAsync(string priority);

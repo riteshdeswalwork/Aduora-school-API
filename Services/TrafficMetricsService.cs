@@ -44,6 +44,45 @@ public class TrafficMetricsService : ITrafficMetricsService
         PruneRecentRequests();
     }
 
+    public TrafficHealthMetrics GetHealthMetrics()
+    {
+        PruneRecentRequests();
+        var now = DateTime.UtcNow;
+        var recent = _recentRequests.ToArray();
+        var perMinute = recent.Count(t => t >= now.AddMinutes(-1));
+        var per5Minutes = recent.Count(t => t >= now.AddMinutes(-5));
+        var totalRequests = Interlocked.Read(ref _totalRequests);
+        var success2xx = Interlocked.Read(ref _success2xx);
+        var client4xx = Interlocked.Read(ref _client4xx);
+        var server5xx = Interlocked.Read(ref _server5xx);
+        var otherStatus = Interlocked.Read(ref _otherStatus);
+        var errorRate = totalRequests > 0 ? Math.Round(((double)(client4xx + server5xx) / totalRequests) * 100, 2) : 0;
+        var avgResponseMs = totalRequests > 0
+            ? Math.Round((double)Interlocked.Read(ref _totalDurationMs) / totalRequests, 2)
+            : 0;
+
+        return new TrafficHealthMetrics
+        {
+            ActiveRequests = Interlocked.Read(ref _activeRequests),
+            TotalRequests = totalRequests,
+            Success2xx = success2xx,
+            Server5xx = server5xx,
+            Client4xx = client4xx,
+            OtherStatus = otherStatus,
+            ErrorRatePercent = errorRate,
+            RequestsPerMinute = perMinute,
+            RequestsLast5Minutes = per5Minutes,
+            AverageResponseMs = avgResponseMs,
+            UptimeSeconds = (long)(now - _startedAtUtc).TotalSeconds,
+            StartedAtUtc = _startedAtUtc,
+            TopRoutes = _pathCounters
+                .OrderByDescending(kv => kv.Value)
+                .Take(8)
+                .Select(kv => new TrafficRouteCount { Route = kv.Key, Requests = kv.Value })
+                .ToList()
+        };
+    }
+
     public object GetSnapshot()
     {
         PruneRecentRequests();

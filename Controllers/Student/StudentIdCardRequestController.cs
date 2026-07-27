@@ -5,6 +5,7 @@ using sms.api.Controllers.Shared;
 using sms.api.Data;
 using sms.api.Interfaces.Student;
 using sms.api.Models;
+using sms.api.Services;
 using sms.api.Utils;
 
 namespace sms.api.Controllers.Student
@@ -15,11 +16,13 @@ namespace sms.api.Controllers.Student
     {
         private readonly ApplicationDbContext _context;
         private readonly IStudentIdCardRequestManager _manager;
+        private readonly INotificationOrchestrator? _notify;
 
-        public StudentIdCardRequestController(ApplicationDbContext context, IStudentIdCardRequestManager manager)
+        public StudentIdCardRequestController(ApplicationDbContext context, IStudentIdCardRequestManager manager, INotificationOrchestrator? notify = null)
         {
             _context = context;
             _manager = manager;
+            _notify = notify;
         }
 
         [HttpGet]
@@ -101,12 +104,14 @@ namespace sms.api.Controllers.Student
             if (existing == null) return NotFound(new { message = "Student ID card request not found" });
             entity.Id = id;
             if (entity.AcademicYearId == default) entity.AcademicYearId = existing.AcademicYearId;
+            var priorStatus = existing.Status;
             if (string.Equals(entity.Status, "Approved", StringComparison.OrdinalIgnoreCase) && !existing.ApprovedAt.HasValue)
             {
                 entity.ApprovedAt = DateTime.UtcNow;
                 entity.ApprovedByUserId = GetCurrentUserId();
             }
             var updated = await _manager.UpdateAsync(entity);
+            await NotifyApprovedAsync(updated, priorStatus);
             return Ok(updated);
         }
 
@@ -120,7 +125,36 @@ namespace sms.api.Controllers.Student
             existing.ApprovedAt = DateTime.UtcNow;
             existing.ApprovedByUserId = GetCurrentUserId();
             await _context.SaveChangesAsync();
+            await NotifyApprovedAsync(existing, "Pending");
             return Ok(existing);
+        }
+
+        private async Task NotifyApprovedAsync(StudentIdCardRequest request, string? priorStatus)
+        {
+            if (!string.Equals(request.Status, "Approved", StringComparison.OrdinalIgnoreCase)) return;
+            if (string.Equals(priorStatus, "Approved", StringComparison.OrdinalIgnoreCase)) return;
+
+            var recipients = new List<Guid>();
+            if (request.StudentId.HasValue)
+            {
+                var studentUserId = await NotificationEvents.GetStudentUserIdAsync(_context, request.StudentId.Value);
+                if (studentUserId.HasValue) recipients.Add(studentUserId.Value);
+            }
+            if (request.RequestedByUserId.HasValue)
+                recipients.Add(request.RequestedByUserId.Value);
+
+            await NotificationEvents.NotifyUsersAsync(
+                _notify,
+                recipients.Distinct(),
+                "ID card request approved",
+                "Your student ID card request has been approved.",
+                "idcard.approved",
+                "approvals",
+                NotificationChannels.All,
+                request.Id,
+                "StudentIdCardRequest",
+                "success",
+                idempotencyKey: $"idcard.approved:{request.Id}");
         }
 
         [HttpDelete("{id}")]

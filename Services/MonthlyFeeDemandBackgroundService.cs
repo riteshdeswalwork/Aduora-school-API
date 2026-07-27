@@ -75,6 +75,45 @@ namespace sms.api.Services
                             _logger.LogInformation(
                                 "Auto monthly demands: AY {YearCode} {Y}-{M}: created {C}, skipped {S}",
                                 ay.YearCode, y, month, result.Created, result.SkippedExisting);
+
+                            if (result.Created > 0)
+                            {
+                                var notify = scope.ServiceProvider.GetService<INotificationOrchestrator>();
+                                var monthLabel = $"{y}-{month:D2}";
+                                await NotificationEvents.NotifyUsersAsync(
+                                    notify,
+                                    Enumerable.Empty<Guid>(),
+                                    "Monthly fee demands generated",
+                                    $"Created {result.Created} demand(s) for {monthLabel} (AY {ay.YearCode}). Skipped {result.SkippedExisting} existing.",
+                                    "fee.demands.generated",
+                                    "fees",
+                                    NotificationChannels.All,
+                                    ay.Id,
+                                    "AcademicYear",
+                                    includeAdmins: true,
+                                    idempotencyKey: $"fee.demands.generated:{ay.Id}:{y}:{month}");
+
+                                var studentUserIds = await ctx.StudentFees.AsNoTracking()
+                                    .Where(sf => sf.AcademicYearId == ay.Id && sf.Source == "AutoDemand"
+                                        && sf.BillingPeriodYear == y && sf.BillingPeriodMonth == month)
+                                    .Join(ctx.Students.AsNoTracking(), sf => sf.StudentId, s => s.Id, (sf, s) => s.UserId)
+                                    .Where(uid => uid != Guid.Empty)
+                                    .Distinct()
+                                    .ToListAsync(stoppingToken);
+
+                                await NotificationEvents.NotifyUsersAsync(
+                                    notify,
+                                    studentUserIds,
+                                    "Monthly fee demand",
+                                    $"A fee demand for {monthLabel} has been generated. Please check your fee portal.",
+                                    "fee.demand.created",
+                                    "fees",
+                                    NotificationChannels.Push | NotificationChannels.InApp | NotificationChannels.Sms,
+                                    ay.Id,
+                                    "StudentFee",
+                                    smsBody: $"Fee demand for {monthLabel} is ready. Check the portal.",
+                                    idempotencyKey: $"fee.demand.student:{ay.Id}:{y}:{month}");
+                            }
                         }
                         catch (Exception ex)
                         {

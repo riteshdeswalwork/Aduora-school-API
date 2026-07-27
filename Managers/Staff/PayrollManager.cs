@@ -6,17 +6,20 @@ using sms.api.Interfaces.Staff;
 using sms.api.Models;
 using sms.api.Models.DTOs;
 using sms.api.Models.Enums;
+using sms.api.Services;
 
 namespace sms.api.Managers.Staff
 {
     public class PayrollManager : IPayrollManager
     {
         private readonly ApplicationDbContext _context;
+        private readonly INotificationOrchestrator? _notify;
         private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-        public PayrollManager(ApplicationDbContext context)
+        public PayrollManager(ApplicationDbContext context, INotificationOrchestrator? notify = null)
         {
             _context = context;
+            _notify = notify;
         }
 
         public async Task<IReadOnlyList<PayrollComponentDefinitionDto>> GetComponentsAsync()
@@ -588,6 +591,7 @@ namespace sms.api.Managers.Staff
             p.Status = "Finalized";
             p.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+            await NotifyPeriodStaffAsync(periodId, p, "payroll.finalized", "Payroll finalized", $"Payroll for {p.Month}/{p.Year} has been finalized.");
             return true;
         }
 
@@ -599,7 +603,31 @@ namespace sms.api.Managers.Staff
             p.Status = "Paid";
             p.UpdatedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
+            await NotifyPeriodStaffAsync(periodId, p, "payroll.paid", "Payroll paid", $"Payroll for {p.Month}/{p.Year} has been marked paid.");
             return true;
+        }
+
+        private async Task NotifyPeriodStaffAsync(Guid periodId, PayrollPeriod period, string type, string title, string body)
+        {
+            var staffUserIds = await _context.PayrollSlips.AsNoTracking()
+                .Where(s => s.PayrollPeriodId == periodId)
+                .Join(_context.Staff.AsNoTracking(), s => s.StaffId, st => st.Id, (s, st) => st.UserId)
+                .Where(uid => uid != Guid.Empty)
+                .Distinct()
+                .ToListAsync();
+
+            await NotificationEvents.NotifyUsersAsync(
+                _notify,
+                staffUserIds,
+                title,
+                body,
+                type,
+                "general",
+                NotificationChannels.All,
+                periodId,
+                "PayrollPeriod",
+                "info",
+                idempotencyKey: $"{type}:{periodId}");
         }
 
         public async Task<bool> LockPeriodAsync(Guid periodId)

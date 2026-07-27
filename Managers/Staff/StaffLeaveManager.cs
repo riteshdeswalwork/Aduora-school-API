@@ -9,14 +9,17 @@ using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
 using sms.api.Models;
 using sms.api.Models.DTOs;
+using sms.api.Services;
 
 namespace sms.api.Managers.Staff
 {
     public class StaffLeaveManager : GenericManager<StaffLeave>, IStaffLeaveManager
     {
+        private readonly INotificationOrchestrator? _notify;
 
-        public StaffLeaveManager(ApplicationDbContext context) : base(context)
+        public StaffLeaveManager(ApplicationDbContext context, INotificationOrchestrator? notify = null) : base(context)
         {
+            _notify = notify;
         }
 
         public override async Task<IEnumerable<StaffLeave>> GetAllAsync()
@@ -88,6 +91,23 @@ namespace sms.api.Managers.Staff
             leave.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            var staffUserId = leave.Staff?.UserId ?? await NotificationEvents.GetStaffUserIdAsync(_context, leave.StaffId);
+            if (staffUserId.HasValue)
+            {
+                await NotificationEvents.NotifyUsersAsync(
+                    _notify,
+                    new[] { staffUserId.Value },
+                    "Leave approved",
+                    $"Your leave from {leave.StartDate:dd MMM} to {leave.EndDate:dd MMM} was approved.",
+                    "leave.approved",
+                    "approvals",
+                    NotificationChannels.All,
+                    leave.Id,
+                    "StaffLeave",
+                    "success",
+                    idempotencyKey: $"staffleave.approved:{leave.Id}");
+            }
             return true;
         }
 
@@ -115,6 +135,23 @@ namespace sms.api.Managers.Staff
             leave.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            var staffUserId = leave.Staff?.UserId ?? await NotificationEvents.GetStaffUserIdAsync(_context, leave.StaffId);
+            if (staffUserId.HasValue)
+            {
+                await NotificationEvents.NotifyUsersAsync(
+                    _notify,
+                    new[] { staffUserId.Value },
+                    "Leave rejected",
+                    $"Your leave request was rejected. {reason}",
+                    "leave.rejected",
+                    "approvals",
+                    NotificationChannels.All,
+                    leave.Id,
+                    "StaffLeave",
+                    "warning",
+                    idempotencyKey: $"staffleave.rejected:{leave.Id}");
+            }
             return true;
         }
 
@@ -132,7 +169,22 @@ namespace sms.api.Managers.Staff
                 CreatedAt = DateTime.UtcNow
             };
 
-            return await CreateAsync(leave);
+            var created = await CreateAsync(leave);
+
+            var approvers = await NotificationEvents.GetStaffLeaveApproverUserIdsAsync(_context, leave.StaffId);
+            var admins = await NotificationEvents.GetAdminUserIdsAsync(_context);
+            await NotificationEvents.NotifyUsersAsync(
+                _notify,
+                approvers.Concat(admins).Distinct(),
+                "New staff leave request",
+                $"A staff leave request needs approval ({leave.StartDate:dd MMM} – {leave.EndDate:dd MMM}).",
+                "leave.created",
+                "approvals",
+                NotificationChannels.InApp | NotificationChannels.Push | NotificationChannels.Email,
+                leave.Id,
+                "StaffLeave");
+
+            return created;
         }
 
         public async Task<bool> AssignApproverAsync(Guid staffId, Guid approverId)

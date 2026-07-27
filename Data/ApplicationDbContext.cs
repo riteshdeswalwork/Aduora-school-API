@@ -73,6 +73,9 @@ namespace sms.api.Data
         public DbSet<ChatRolePolicy> ChatRolePolicies { get; set; }
         public DbSet<StaffAttendance> StaffAttendances { get; set; }
         public DbSet<FcmToken> FcmTokens { get; set; }
+        public DbSet<InAppNotification> InAppNotifications { get; set; }
+        public DbSet<NotificationDeliveryLog> NotificationDeliveryLogs { get; set; }
+        public DbSet<UserNotificationPreference> UserNotificationPreferences { get; set; }
 
         public DbSet<VisitorEntry> VisitorEntries { get; set; }
         public DbSet<Enquiry> Enquiries { get; set; }
@@ -97,6 +100,9 @@ namespace sms.api.Data
 
         public DbSet<BiometricDevice> BiometricDevices { get; set; }
         public DbSet<BiometricLog> BiometricLogs { get; set; }
+        public DbSet<BiometricUserMap> BiometricUserMaps { get; set; }
+        public DbSet<BiometricFingerTemplate> BiometricFingerTemplates { get; set; }
+        public DbSet<BiometricFaceTemplate> BiometricFaceTemplates { get; set; }
         public DbSet<InventoryItem> InventoryItems { get; set; }
         public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
         public DbSet<Asset> Assets { get; set; }

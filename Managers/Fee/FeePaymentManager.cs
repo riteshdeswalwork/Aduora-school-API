@@ -10,6 +10,7 @@ using sms.api.Interfaces.Shared;
 using sms.api.Interfaces.Student;
 using sms.api.Managers.Shared;
 using sms.api.Models;
+using sms.api.Services;
 using sms.api.Utils;
 using sms.api.Controllers.Fee;
 
@@ -18,10 +19,12 @@ namespace sms.api.Managers.Fee
     public class FeePaymentManager : GenericManager<FeePayment>, IFeePaymentManager
     {
         private readonly IStudentFeeManager _studentFeeManager;
+        private readonly INotificationOrchestrator? _notify;
 
-        public FeePaymentManager(ApplicationDbContext context, IStudentFeeManager studentFeeManager) : base(context)
+        public FeePaymentManager(ApplicationDbContext context, IStudentFeeManager studentFeeManager, INotificationOrchestrator? notify = null) : base(context)
         {
             _studentFeeManager = studentFeeManager;
+            _notify = notify;
         }
 
         public override async Task<IEnumerable<FeePayment>> GetAllAsync()
@@ -256,6 +259,26 @@ namespace sms.api.Managers.Fee
                 await _studentFeeManager.RecalculateStudentFeeOutstandingAsync(request.StudentFeeId);
                 await transaction.CommitAsync();
 
+                var studentUserId = studentFee.Student?.UserId;
+                if (studentUserId == null || studentUserId == Guid.Empty)
+                    studentUserId = await NotificationEvents.GetStudentUserIdAsync(_context, studentFee.StudentId);
+
+                var feeName = studentFee.FeeStructure?.Name ?? "fee";
+                await NotificationEvents.NotifyUsersAsync(
+                    _notify,
+                    studentUserId.HasValue ? new[] { studentUserId.Value } : Enumerable.Empty<Guid>(),
+                    "Fee payment received",
+                    $"Payment of {request.Amount:N2} collected for {feeName}. Receipt: {payment.ReceiptNumber}.",
+                    "fee.collected",
+                    "fees",
+                    NotificationChannels.All,
+                    payment.Id,
+                    "FeePayment",
+                    "success",
+                    smsBody: $"Fee {request.Amount:N0} received for {feeName}.",
+                    idempotencyKey: $"fee.collected:{payment.Id}",
+                    includeAdmins: true);
+
                 // Load the complete payment with all related data
                 var completePayment = await GetByIdAsync(payment.Id);
 
@@ -279,7 +302,10 @@ namespace sms.api.Managers.Fee
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var payment = await _dbSet.FirstOrDefaultAsync(fp => fp.Id == paymentId);
+                var payment = await _dbSet
+                    .Include(fp => fp.StudentFee)
+                        .ThenInclude(sf => sf!.Student)
+                    .FirstOrDefaultAsync(fp => fp.Id == paymentId);
                 if (payment == null || payment.IsVoided)
                     return false;
 
@@ -292,6 +318,25 @@ namespace sms.api.Managers.Fee
                 await _context.SaveChangesAsync();
                 await _studentFeeManager.RecalculateStudentFeeOutstandingAsync(payment.StudentFeeId);
                 await transaction.CommitAsync();
+
+                var studentUserId = payment.StudentFee?.Student?.UserId;
+                if ((!studentUserId.HasValue || studentUserId == Guid.Empty) && payment.StudentFee != null)
+                    studentUserId = await NotificationEvents.GetStudentUserIdAsync(_context, payment.StudentFee.StudentId);
+
+                await NotificationEvents.NotifyUsersAsync(
+                    _notify,
+                    studentUserId.HasValue ? new[] { studentUserId.Value } : Enumerable.Empty<Guid>(),
+                    "Fee payment voided",
+                    $"A fee payment of {payment.Amount:N2} was voided. {payment.VoidReason}".Trim(),
+                    "fee.voided",
+                    "fees",
+                    NotificationChannels.All,
+                    payment.Id,
+                    "FeePayment",
+                    "warning",
+                    idempotencyKey: $"fee.voided:{payment.Id}",
+                    includeAdmins: true);
+
                 return true;
             }
             catch
