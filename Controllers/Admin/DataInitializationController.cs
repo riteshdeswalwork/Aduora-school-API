@@ -79,6 +79,21 @@ namespace sms.api.Controllers.Admin
             }
         }
 
+        [HttpPost("step-4b-role-users")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Step4bRoleUsers()
+        {
+            try
+            {
+                var result = await _dataInitializationManager.Step4bRoleUsersAsync();
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error in step 4b", error = ex.Message });
+            }
+        }
+
         /// <summary>
         /// Seeds portal <c>page.*</c> permissions from <c>PagePermissions.GetAllPageCodesForSeed()</c>
         /// (AllPages + AdditionalSeedPageCodes: fee-management, manage-calendar, send-notifications), including actions and tabs.

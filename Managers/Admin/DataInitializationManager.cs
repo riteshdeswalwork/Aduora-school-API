@@ -63,6 +63,7 @@ namespace sms.api.Managers.Admin
         public async Task<object> Step2DepartmentsAsync() => await InitializeDepartments();
         public async Task<object> Step3DesignationsAsync() => await InitializeDesignations();
         public async Task<object> Step4AdminAsync() => await InitializeAdmin();
+        public async Task<object> Step4bRoleUsersAsync() => await InitializeRoleUsers();
         public async Task<object> Step5PermissionsAsync()
         {
             var pageCodes = PagePermissions.GetAllPageCodesForSeed();
@@ -2065,6 +2066,92 @@ namespace sms.api.Managers.Admin
             _context.OnlinePaymentTransactions.AddRange(list);
             await _context.SaveChangesAsync();
             return new { message = "Online payment transactions created", count = list.Count };
+        }
+
+        // Step 4B: Initialize demo users for each system role (RBAC)
+        private async Task<object> InitializeRoleUsers()
+        {
+            var sampleUsers = new List<(string RoleName, string FirstName, string LastName, string Email, string DefaultPassword)>
+            {
+                ("Admin", "System", "Admin", "admin@excellenceacademy.edu", "Admin@123"),
+                ("Principal", "Dr.", "Principal", "principal@excellenceacademy.edu", "Principal@123"),
+                ("Teacher", "James", "Teacher1", "james.teacher@excellenceacademy.edu", "Teacher@123"),
+                ("Teacher", "Sarah", "Teacher2", "sarah.teacher@excellenceacademy.edu", "Teacher@123"),
+                ("Teacher", "Robert", "Teacher3", "robert.teacher@excellenceacademy.edu", "Teacher@123"),
+                ("HR", "Maria", "HR", "maria.hr@excellenceacademy.edu", "HR@123"),
+                ("Accountant", "David", "Accountant", "david.accountant@excellenceacademy.edu", "Accountant@123"),
+                ("Receptionist", "Lisa", "Receptionist", "lisa.receptionist@excellenceacademy.edu", "Receptionist@123"),
+                ("Transport Manager", "Mike", "Transport", "mike.transport@excellenceacademy.edu", "TransportManager@123"),
+                ("Librarian", "Amanda", "Librarian", "amanda.librarian@excellenceacademy.edu", "Librarian@123"),
+                ("Driver", "John", "Driver1", "john.driver@excellenceacademy.edu", "Driver@123"),
+                ("Driver", "George", "Driver2", "george.driver@excellenceacademy.edu", "Driver@123"),
+                ("Parent", "Robert", "Parent1", "robert.parent@excellenceacademy.edu", "Parent@123"),
+                ("Parent", "Jennifer", "Parent2", "jennifer.parent@excellenceacademy.edu", "Parent@123"),
+                ("Staff", "David", "Wilson", "david.wilson@excellenceacademy.edu", "Staff@123")
+            };
+
+            var createdUsers = new List<object>();
+
+            foreach (var (roleName, firstName, lastName, email, defaultPassword) in sampleUsers)
+            {
+                // Skip if user already exists
+                if (await _context.Users.AnyAsync(u => u.Email == email))
+                {
+                    createdUsers.Add(new { role = roleName, email, status = "Already exists" });
+                    continue;
+                }
+
+                // Create user
+                var newUser = new User
+                {
+                    Id = Guid.NewGuid(),
+                    FirstName = firstName,
+                    LastName = lastName,
+                    Email = email,
+                    Username = $"{firstName.ToLower()}.{lastName.ToLower()}",
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(defaultPassword),
+                    Role = roleName,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.Users.Add(newUser);
+                await _context.SaveChangesAsync();
+
+                // Assign user to system role via UserRoles table
+                var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == roleName);
+                if (role != null)
+                {
+                    var userRole = new UserRole
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = newUser.Id,
+                        RoleId = role.Id,
+                        IsActive = true,
+                        AssignedAt = DateTime.UtcNow,
+                        AssignedByUserId = newUser.Id
+                    };
+                    _context.UserRoles.Add(userRole);
+                    await _context.SaveChangesAsync();
+                }
+
+                createdUsers.Add(new
+                {
+                    role = roleName,
+                    username = newUser.Username,
+                    email,
+                    password = defaultPassword,
+                    status = "Created"
+                });
+            }
+
+            return new
+            {
+                message = "Role-based demo users initialized successfully",
+                totalProcessed = sampleUsers.Count,
+                createdCount = createdUsers.Count(u => u.GetType().GetProperty("status")?.GetValue(u)?.ToString() == "Created"),
+                details = createdUsers
+            };
         }
     }
 }
