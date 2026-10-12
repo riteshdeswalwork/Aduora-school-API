@@ -11,6 +11,7 @@ namespace sms.api.Interfaces.Admin
         Task<object> Step2DepartmentsAsync();
         Task<object> Step3DesignationsAsync();
         Task<object> Step4AdminAsync();
+        Task<object> Step4bRoleUsersAsync();
         Task<object> Step5PermissionsAsync();
         Task<object> Step5RolesAsync();
         Task<object> Step5AssignAllPermissionsToRoleAsync(Guid roleId);
