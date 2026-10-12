@@ -23,13 +23,14 @@ jobs:
     env:
       PROJECT_FILE: sms.api.csproj
       DEPLOY_PATH: 'C:\inetpub\wwwroot\Aduora-School-Backend'
-      BACKUP_ROOT: 'C:\CI-CD\Backups\Aduora-School-Backend'
       APP_POOL: api-school-aduora
 
     steps:
+      # 1. Checkout UAT branch
       - name: Checkout UAT branch
         uses: actions/checkout@v4
 
+      # 2. Verify .NET SDK and project
       - name: Verify .NET SDK and project
         shell: powershell
         run: |
@@ -43,7 +44,8 @@ jobs:
 
           Write-Host "Project found: $env:PROJECT_FILE"
 
-      - name: Build and publish
+      # 3. Restore and publish
+      - name: Build and Publish
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -54,10 +56,11 @@ jobs:
             Remove-Item $publishPath -Recurse -Force
           }
 
-          New-Item -ItemType Directory -Force `
-            -Path $publishPath | Out-Null
+          New-Item -ItemType Directory -Force -Path $publishPath |
+            Out-Null
 
           dotnet restore $env:PROJECT_FILE
+
           if ($LASTEXITCODE -ne 0) {
             throw "dotnet restore failed"
           }
@@ -79,115 +82,108 @@ jobs:
             throw "Published web.config not found"
           }
 
-          Write-Host "Publish validation successful."
+          Write-Host "Build and publish completed successfully."
 
-      - name: Backup and deploy
+      # 4. Deploy directly without backup
+      - name: Deploy to IIS
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
 
-          Import-Module WebAdministration
-
           $publishPath = Join-Path $env:RUNNER_TEMP 'AduoraSchoolAPI-Publish'
           $target = $env:DEPLOY_PATH
-          $backupRoot = $env:BACKUP_ROOT
           $pool = $env:APP_POOL
 
-          $poolPath = "IIS:\AppPools\$pool"
+          Import-Module WebAdministration
 
-          if (!(Test-Path $poolPath)) {
-            throw "IIS App Pool not found: $pool"
+          if (!(Test-Path $publishPath)) {
+            throw "Publish folder not found: $publishPath"
+          }
+
+          if (!(Test-Path (Join-Path $publishPath 'sms.api.dll'))) {
+            throw "Published sms.api.dll not found"
+          }
+
+          if (!(Test-Path (Join-Path $publishPath 'web.config'))) {
+            throw "Published web.config not found"
           }
 
           if (!(Test-Path $target)) {
             throw "Existing deployment folder not found: $target"
           }
 
-          New-Item -ItemType Directory -Force `
-            -Path $backupRoot | Out-Null
+          if (!(Test-Path "IIS:\AppPools\$pool")) {
+            throw "IIS App Pool not found: $pool"
+          }
 
-          $backup = Join-Path $backupRoot `
-            (Get-Date -Format 'yyyyMMdd-HHmmss')
-
-          New-Item -ItemType Directory -Force `
-            -Path $backup | Out-Null
-
-          $poolWasStarted = (
-            (Get-WebAppPoolState -Name $pool).Value -eq 'Started'
-          )
-
-          $backupCreated = $false
+          $wasStarted = (Get-WebAppPoolState -Name $pool).Value -eq 'Started'
 
           try {
-            # Preserve the existing deployed files first.
-            robocopy $target $backup /E /COPY:DAT /DCOPY:DAT /R:2 /W:2
-            if ($LASTEXITCODE -ge 8) {
-              throw "Backup failed. Existing deployment left untouched."
-            }
-
-            $backupCreated = $true
-            Write-Host "Backup created: $backup"
-
-            # Stop only this application's App Pool.
-            if ($poolWasStarted) {
+            if ($wasStarted) {
               Stop-WebAppPool -Name $pool
 
               $deadline = (Get-Date).AddSeconds(60)
+
               do {
                 Start-Sleep -Seconds 2
                 $state = (Get-WebAppPoolState -Name $pool).Value
-              } while ($state -ne 'Stopped' -and (Get-Date) -lt $deadline)
+              } while (
+                $state -ne 'Stopped' -and
+                (Get-Date) -lt $deadline
+              )
 
               if ($state -ne 'Stopped') {
-                throw "App Pool did not stop in time."
+                throw "App Pool did not stop within 60 seconds."
               }
             }
 
-            # Deploy the validated published output.
-            robocopy $publishPath $target /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:2
-            if ($LASTEXITCODE -ge 8) {
-              throw "Deployment copy failed."
+            robocopy $publishPath $target `
+              /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:2
+
+            $copyExitCode = $LASTEXITCODE
+
+            if ($copyExitCode -ge 8) {
+              throw "Deployment copy failed. Robocopy exit code: $copyExitCode"
             }
 
             if (!(Test-Path (Join-Path $target 'sms.api.dll'))) {
               throw "Deployment validation failed: sms.api.dll missing."
             }
 
-            Write-Host "Deployment files copied successfully."
-          }
-          catch {
-            Write-Error $_
-
-            if ($backupCreated) {
-              Write-Warning "Attempting rollback from: $backup"
-
-              robocopy $backup $target /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:2
-              if ($LASTEXITCODE -ge 8) {
-                Write-Error "Rollback copy failed. Manual recovery required."
-              }
+            if (!(Test-Path (Join-Path $target 'web.config'))) {
+              throw "Deployment validation failed: web.config missing."
             }
 
-            throw
+            Write-Host "Deployment files copied and validated."
           }
           finally {
-            if ($poolWasStarted) {
+            if ($wasStarted) {
               Start-WebAppPool -Name $pool
+              Write-Host "App Pool start requested: $pool"
             }
           }
 
           Write-Host "Deployment completed."
-          Write-Host "Backup location: $backup"
 
-      - name: Verify deployment files
+      # 5. Verify deployed files
+      - name: Verify Deployment
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
 
           $dll = Join-Path $env:DEPLOY_PATH 'sms.api.dll'
+          $config = Join-Path $env:DEPLOY_PATH 'web.config'
 
           if (!(Test-Path $dll)) {
             throw "Deployment verification failed: $dll missing"
           }
 
-          Get-Item $dll |
-            Select-Object FullName, Length, LastWriteTime
+          if (!(Test-Path $config)) {
+            throw "Deployment verification failed: $config missing"
+          }
+
+          Get-Item $dll, $config |
+            Select-Object FullName, Length, LastWriteTime |
+            Format-Table -AutoSize
+
+          Write-Host "Deployment verification completed."
