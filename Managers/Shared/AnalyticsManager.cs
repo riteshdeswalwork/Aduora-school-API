@@ -45,7 +45,7 @@ namespace sms.api.Managers.Shared
                     .ToListAsync()).ToHashSet();
             }
 
-            var studentsQuery = _context.Students.Include(s => s.User).AsQueryable();
+            var studentsQuery = _context.Students.AsNoTracking().Include(s => s.User).AsQueryable();
             if (allowedStudentIds != null)
                 studentsQuery = studentsQuery.Where(s => allowedStudentIds.Contains(s.Id));
 
@@ -62,6 +62,7 @@ namespace sms.api.Managers.Shared
             };
 
             var classWiseQuery = _context.ClassEnrollments
+                .AsNoTracking()
                 .Include(ce => ce.Class)
                 .AsQueryable();
             if (allowed != null)
@@ -108,6 +109,7 @@ namespace sms.api.Managers.Shared
         public async Task<StaffAnalyticsDTO> GetStaffAnalyticsAsync()
         {
             var staff = await _context.Staff
+                .AsNoTracking()
                 .Include(s => s.User)
                 .Include(s => s.Designation)
                     .ThenInclude(d => d.Department)
@@ -175,6 +177,7 @@ namespace sms.api.Managers.Shared
 
             var thirtyDaysAgo = DateTime.Now.AddDays(-30);
             var attendanceQuery = _context.ClassAttendanceRecords
+                .AsNoTracking()
                 .Include(ar => ar.ClassAttendance)
                 .Where(ar => ar.ClassAttendance.Date >= thirtyDaysAgo);
 
@@ -289,6 +292,7 @@ namespace sms.api.Managers.Shared
         {
             var allowed = allowedClassIds?.ToHashSet();
             var examsQuery = _context.Exams
+                .AsNoTracking()
                 .Include(e => e.ExamResults)
                 .Include(e => e.Subject)
                 .AsQueryable();
@@ -344,7 +348,7 @@ namespace sms.api.Managers.Shared
         public async Task<ClassAnalyticsDTO> GetClassAnalyticsAsync(IEnumerable<Guid>? allowedClassIds = null)
         {
             var allowed = allowedClassIds?.ToHashSet();
-            var classesQuery = _context.Classes.Include(c => c.Enrollments).AsQueryable();
+            var classesQuery = _context.Classes.AsNoTracking().Include(c => c.Enrollments).AsQueryable();
             if (allowed != null)
                 classesQuery = classesQuery.Where(c => allowed.Contains(c.Id));
 
@@ -372,6 +376,7 @@ namespace sms.api.Managers.Shared
         public async Task<DepartmentAnalyticsDTO> GetDepartmentAnalyticsAsync()
         {
             var departments = await _context.Departments
+                .AsNoTracking()
                 .Include(d => d.Staff)
                 .Include(d => d.Subjects)
                 .ToListAsync();

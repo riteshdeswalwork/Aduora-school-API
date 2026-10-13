@@ -55,8 +55,16 @@ builder.Services.AddControllers()
     });
 
 // Configure DbContext
+// EnableRetryOnFailure: transparently retries on transient SQL errors (timeouts,
+// dropped connections) instead of failing the request outright - the remote DB
+// is accessed over the network, so brief blips are expected.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorNumbersToAdd: null)));
 
 // Configure JWT Authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -178,6 +186,9 @@ builder.Services.AddScoped<IScholarshipApplicationManager, ScholarshipApplicatio
 builder.Services.AddScoped<IAcademicYearManager, AcademicYearManager>();
 builder.Services.AddScoped<IStudentAcademicHistoryManager, StudentAcademicHistoryManager>();
 
+// Dapper-based stored-procedure data access (performance path for high-traffic, paginated GET endpoints)
+builder.Services.AddScoped<sms.api.Services.Data.ISqlDataAccess, sms.api.Services.Data.SqlDataAccess>();
+
 // Configure Google reCAPTCHA
 builder.Services.AddHttpClient<ICaptchaValidator, GoogleReCaptchaValidator>();
 builder.Services.Configure<GoogleReCaptchaConfig>(options =>
@@ -239,6 +250,23 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Compress JSON responses (Brotli preferred, Gzip fallback) - shrinks large
+// payloads like the permissions list / paged grids before they hit the wire.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+});
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(options =>
+{
+    options.Level = System.IO.Compression.CompressionLevel.Fastest;
+});
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(options =>
+{
+    options.Level = System.IO.Compression.CompressionLevel.Fastest;
+});
+
 // Configure Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -283,6 +311,8 @@ if (app.Environment.IsDevelopment())
         c.RoutePrefix = string.Empty; // Set Swagger UI at the root
     });
 }
+
+app.UseResponseCompression();
 
 app.UseHttpsRedirection();
 

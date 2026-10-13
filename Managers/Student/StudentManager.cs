@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.Interfaces.Academic;
@@ -9,6 +11,8 @@ using sms.api.Interfaces.Student;
 using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
 using sms.api.Models;
+using sms.api.Models.Enums;
+using sms.api.Services.Data;
 using StudentEntity = sms.api.Models.Student;
 
 namespace sms.api.Managers.Student
@@ -17,11 +21,28 @@ namespace sms.api.Managers.Student
     {
         private readonly IUserManager _userManager;
         private readonly IAcademicYearManager _academicYearManager;
+        private readonly ISqlDataAccess _sqlDataAccess;
 
-        public StudentManager(ApplicationDbContext context, IUserManager userManager, IAcademicYearManager academicYearManager) : base(context)
+        public StudentManager(ApplicationDbContext context, IUserManager userManager, IAcademicYearManager academicYearManager, ISqlDataAccess sqlDataAccess) : base(context)
         {
             _userManager = userManager;
             _academicYearManager = academicYearManager;
+            _sqlDataAccess = sqlDataAccess;
+        }
+
+        // Flat row shape returned by dbo.sp_Students_GetPaged - mirrors exactly what
+        // StudentController's "paged" endpoint reads off the entity (Id, name parts,
+        // roll/registration numbers, class name, status, profile photo bytes).
+        private sealed class StudentPagedRow
+        {
+            public Guid Id { get; set; }
+            public string? FirstName { get; set; }
+            public string? LastName { get; set; }
+            public string? RollNumber { get; set; }
+            public string? RegistrationNumber { get; set; }
+            public string? ClassName { get; set; }
+            public int Status { get; set; }
+            public byte[]? ProfilePhotoData { get; set; }
         }
 
         private string EnsurePasswordIsHashed(string password)
@@ -71,69 +92,53 @@ namespace sms.api.Managers.Student
 
         public async Task<(IEnumerable<StudentEntity> items, int totalCount)> GetPagedAsync(int pageNumber, int pageSize, string? searchTerm = null, Guid? academicYearId = null, IEnumerable<Guid>? allowedStudentIds = null)
         {
-            var query = _dbSet
-                .AsNoTracking()
-                .Include(s => s.User)
-                .Include(s => s.Class)
-                .AsQueryable();
-
-            if (academicYearId.HasValue)
-            {
-                // Ignore global academic-year header filter so query param controls the list.
-                var enrolledStudentIds = await _context.ClassEnrollments
-                    .IgnoreQueryFilters()
-                    .AsNoTracking()
-                    .Where(e => e.AcademicYearId == academicYearId.Value && e.IsActive)
-                    .Select(e => e.StudentId)
-                    .Distinct()
-                    .ToListAsync();
-
-                if (enrolledStudentIds.Count > 0)
-                {
-                    var studentsWithAnyEnrollment = await _context.ClassEnrollments
-                        .IgnoreQueryFilters()
-                        .AsNoTracking()
-                        .Where(e => e.IsActive)
-                        .Select(e => e.StudentId)
-                        .Distinct()
-                        .ToListAsync();
-
-                    // Enrolled in this year, or no enrollment row yet (legacy / import without ClassEnrollment).
-                    query = query.Where(s =>
-                        enrolledStudentIds.Contains(s.Id) ||
-                        !studentsWithAnyEnrollment.Contains(s.Id));
-                }
-            }
-
+            // Preserve the original short-circuit: an explicit, empty allow-list means
+            // "no access to anyone" - don't even round-trip to the database for it.
+            List<Guid>? idList = null;
             if (allowedStudentIds != null)
             {
-                var idList = allowedStudentIds.ToList();
+                idList = allowedStudentIds.ToList();
                 if (idList.Count == 0)
                     return (new List<StudentEntity>(), 0);
-                query = query.Where(s => idList.Contains(s.Id));
             }
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            var tvp = new DataTable();
+            tvp.Columns.Add("Id", typeof(Guid));
+            if (idList != null)
+                foreach (var id in idList) tvp.Rows.Add(id);
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", Math.Max(1, pageSize));
+            parameters.Add("@SearchTerm", string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim());
+            parameters.Add("@AcademicYearId", academicYearId);
+            parameters.Add("@HasAllowedFilter", idList != null);
+            parameters.Add("@AllowedStudentIds", tvp.AsTableValuedParameter("dbo.GuidListType"));
+
+            var (rows, totalCount) = await _sqlDataAccess.QueryPagedStoredProcAsync<StudentPagedRow>(
+                "dbo.sp_Students_GetPaged", parameters);
+
+            // Reconstruct lightweight StudentEntity shells with only the fields the
+            // controller's "paged" endpoint actually reads off User/Class, so this
+            // manager's return contract (IStudentManager.GetPagedAsync) is unchanged.
+            var items = rows.Select(r => new StudentEntity
             {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(s =>
-                    (s.User != null && (
-                        (s.User.FirstName != null && s.User.FirstName.ToLower().Contains(term)) ||
-                        (s.User.LastName != null && s.User.LastName.ToLower().Contains(term)) ||
-                        (s.User.Email != null && s.User.Email.ToLower().Contains(term)) ||
-                        (s.User.Username != null && s.User.Username.ToLower().Contains(term)))) ||
-                    (s.RegistrationNumber != null && s.RegistrationNumber.ToLower().Contains(term)) ||
-                    (s.RollNumber != null && s.RollNumber.ToLower().Contains(term)) ||
-                    (s.AdmissionNumber != null && s.AdmissionNumber.ToLower().Contains(term)));
-            }
-
-            var totalCount = await query.CountAsync();
-            var items = await query
-                .OrderBy(s => s.User != null ? s.User.FirstName : "")
-                .ThenBy(s => s.User != null ? s.User.LastName : "")
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(Math.Max(1, pageSize))
-                .ToListAsync();
+                Id = r.Id,
+                RollNumber = r.RollNumber ?? string.Empty,
+                RegistrationNumber = r.RegistrationNumber ?? string.Empty,
+                Status = (StudentStatus)r.Status,
+                User = new sms.api.Models.User
+                {
+                    Id = r.Id,
+                    FirstName = r.FirstName ?? string.Empty,
+                    LastName = r.LastName ?? string.Empty,
+                    ProfilePhotoData = r.ProfilePhotoData,
+                },
+                Class = new sms.api.Models.Class
+                {
+                    Name = r.ClassName ?? string.Empty,
+                },
+            }).ToList();
 
             return (items, totalCount);
         }

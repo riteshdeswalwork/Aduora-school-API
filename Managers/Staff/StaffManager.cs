@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.Interfaces.Staff;
 using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
 using sms.api.Models;
+using sms.api.Services.Data;
 using StaffEntity = sms.api.Models.Staff;
 using StudentEntity = sms.api.Models.Student;
 
@@ -16,10 +18,41 @@ namespace sms.api.Managers.Staff
     public class StaffManager : GenericManager<StaffEntity>, IStaffManager
     {
         private readonly IUserManager _userManager;
+        private readonly ISqlDataAccess _sqlDataAccess;
 
-        public StaffManager(ApplicationDbContext context, IUserManager userManager) : base(context)
+        public StaffManager(ApplicationDbContext context, IUserManager userManager, ISqlDataAccess sqlDataAccess) : base(context)
         {
             _userManager = userManager;
+            _sqlDataAccess = sqlDataAccess;
+        }
+
+        // Flat row shape returned by dbo.sp_Staff_GetPaged - mirrors exactly what
+        // StaffController's "paged" endpoint reads off the entity/navigations.
+        private sealed class StaffPagedRow
+        {
+            public Guid Id { get; set; }
+            public Guid UserId { get; set; }
+            public Guid? DesignationId { get; set; }
+            public string? EmployeeId { get; set; }
+            public DateTime DateOfJoining { get; set; }
+            public string? Address { get; set; }
+            public string? PhoneNumber { get; set; }
+            public string? Qualification { get; set; }
+            public decimal Salary { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime? UpdatedAt { get; set; }
+            public Guid User_Id { get; set; }
+            public string? User_FirstName { get; set; }
+            public string? User_LastName { get; set; }
+            public string? User_Email { get; set; }
+            public string? User_Username { get; set; }
+            public string? User_Role { get; set; }
+            public bool User_IsActive { get; set; }
+            public string? User_ProfilePicture { get; set; }
+            public Guid? Designation_Id { get; set; }
+            public string? Designation_Name { get; set; }
+            public string? Designation_Description { get; set; }
+            public string? Designation_DepartmentName { get; set; }
         }
 
         private string EnsurePasswordIsHashed(string password)
@@ -70,32 +103,49 @@ namespace sms.api.Managers.Staff
 
         public async Task<(IEnumerable<StaffEntity> items, int totalCount)> GetPagedAsync(int pageNumber, int pageSize, string? searchTerm = null)
         {
-            var query = _dbSet
-                .AsNoTracking()
-                .Include(s => s.User)
-                .Include(s => s.Designation)
-                    .ThenInclude(d => d.Department)
-                .AsQueryable();
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", Math.Max(1, pageSize));
+            parameters.Add("@SearchTerm", string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim());
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            var (rows, totalCount) = await _sqlDataAccess.QueryPagedStoredProcAsync<StaffPagedRow>(
+                "dbo.sp_Staff_GetPaged", parameters);
+
+            // Reconstruct lightweight StaffEntity shells with only the fields the
+            // controller's "paged" endpoint actually reads, so this manager's return
+            // contract (IStaffManager.GetPagedAsync) is unchanged.
+            var items = rows.Select(r => new StaffEntity
             {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(s =>
-                    (s.User != null && (
-                        (s.User.FirstName != null && s.User.FirstName.ToLower().Contains(term)) ||
-                        (s.User.LastName != null && s.User.LastName.ToLower().Contains(term)) ||
-                        (s.User.Email != null && s.User.Email.ToLower().Contains(term)) ||
-                        (s.User.Username != null && s.User.Username.ToLower().Contains(term)))) ||
-                    (s.EmployeeId != null && s.EmployeeId.ToLower().Contains(term)));
-            }
-
-            var totalCount = await query.CountAsync();
-            var items = await query
-                .OrderBy(s => s.User != null ? s.User.FirstName : "")
-                .ThenBy(s => s.User != null ? s.User.LastName : "")
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(Math.Max(1, pageSize))
-                .ToListAsync();
+                Id = r.Id,
+                UserId = r.UserId,
+                DesignationId = r.DesignationId,
+                EmployeeId = r.EmployeeId ?? string.Empty,
+                DateOfJoining = r.DateOfJoining,
+                Address = r.Address ?? string.Empty,
+                PhoneNumber = r.PhoneNumber ?? string.Empty,
+                Qualification = r.Qualification ?? string.Empty,
+                Salary = r.Salary,
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt,
+                User = new sms.api.Models.User
+                {
+                    Id = r.User_Id,
+                    FirstName = r.User_FirstName ?? string.Empty,
+                    LastName = r.User_LastName ?? string.Empty,
+                    Email = r.User_Email ?? string.Empty,
+                    Username = r.User_Username ?? string.Empty,
+                    Role = r.User_Role ?? string.Empty,
+                    IsActive = r.User_IsActive,
+                    ProfilePicture = r.User_ProfilePicture,
+                },
+                Designation = r.Designation_Id.HasValue ? new sms.api.Models.Designation
+                {
+                    Id = r.Designation_Id.Value,
+                    Name = r.Designation_Name ?? string.Empty,
+                    Description = r.Designation_Description,
+                    Department = new sms.api.Models.Department { Name = r.Designation_DepartmentName ?? "Not assigned" },
+                } : null,
+            }).ToList();
 
             return (items, totalCount);
         }
