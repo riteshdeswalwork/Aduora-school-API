@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.DTOs;
 using sms.api.Interfaces.Student;
 using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
+using sms.api.Services.Data;
 using sms.api.Utils;
 using sms.api.Models;
 
@@ -15,9 +18,80 @@ namespace sms.api.Managers.Student
 {
     public class StudentFeeManager : GenericManager<StudentFee>, IStudentFeeManager
     {
+        private readonly ISqlDataAccess _sqlDataAccess;
 
-        public StudentFeeManager(ApplicationDbContext context) : base(context)
+        public StudentFeeManager(ApplicationDbContext context, ISqlDataAccess sqlDataAccess) : base(context)
         {
+            _sqlDataAccess = sqlDataAccess;
+        }
+
+        // Flat row shapes returned by dbo.sp_StudentFees_GetPaged.
+        private sealed class StudentFeePagedRow
+        {
+            public Guid Id { get; set; }
+            public Guid StudentId { get; set; }
+            public Guid FeeStructureId { get; set; }
+            public Guid? FeeStructureLineId { get; set; }
+            public Guid AcademicYearId { get; set; }
+            public decimal TotalAmount { get; set; }
+            public decimal Amount { get; set; }
+            public decimal PaidAmount { get; set; }
+            public decimal DiscountAmount { get; set; }
+            public decimal OutstandingAmount { get; set; }
+            public DateTime DueDate { get; set; }
+            public string? Status { get; set; }
+            public string? Remarks { get; set; }
+            public int? BillingPeriodYear { get; set; }
+            public int? BillingPeriodMonth { get; set; }
+            public int? InstallmentSequence { get; set; }
+            public string? Source { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime? UpdatedAt { get; set; }
+            public string? Stu_RollNumber { get; set; }
+            public string? Stu_RegistrationNumber { get; set; }
+            public string? Stu_FirstName { get; set; }
+            public string? Stu_LastName { get; set; }
+            public string? Stu_Email { get; set; }
+            public string? FS_Name { get; set; }
+            public decimal FS_Amount { get; set; }
+            public Guid? FS_ClassId { get; set; }
+            public string? Class_Name { get; set; }
+        }
+
+        private sealed class StudentFeePaymentRow
+        {
+            public Guid Id { get; set; }
+            public Guid StudentFeeId { get; set; }
+            public Guid AcademicYearId { get; set; }
+            public decimal Amount { get; set; }
+            public DateTime PaymentDate { get; set; }
+            public string? PaymentMethod { get; set; }
+            public string? TransactionReference { get; set; }
+            public string? ReceiptNumber { get; set; }
+            public string? Remarks { get; set; }
+            public Guid ReceivedById { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime? UpdatedAt { get; set; }
+            public bool IsVoided { get; set; }
+            public DateTime? VoidedAtUtc { get; set; }
+            public Guid? VoidedById { get; set; }
+            public string? VoidReason { get; set; }
+        }
+
+        private sealed class StudentFeeDiscountRow
+        {
+            public Guid Id { get; set; }
+            public Guid StudentFeeId { get; set; }
+            public Guid AcademicYearId { get; set; }
+            public string? DiscountType { get; set; }
+            public decimal Amount { get; set; }
+            public decimal Percentage { get; set; }
+            public string? Reason { get; set; }
+            public Guid ApprovedById { get; set; }
+            public DateTime ApprovedDate { get; set; }
+            public string? Remarks { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime? UpdatedAt { get; set; }
         }
 
         public override async Task<IEnumerable<StudentFee>> GetAllAsync()
@@ -187,55 +261,117 @@ namespace sms.api.Managers.Student
             Guid? academicYearId,
             IEnumerable<Guid>? allowedClassIds = null)
         {
-            var query = _dbSet
-                .Include(sf => sf.Student)
-                    .ThenInclude(s => s.User)
-                .Include(sf => sf.FeeStructure)
-                    .ThenInclude(fs => fs.Class)
-                .Include(sf => sf.Payments)
-                .Include(sf => sf.Discounts)
-                .AsQueryable();
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 20;
 
-            if (academicYearId.HasValue && academicYearId.Value != Guid.Empty)
-                query = query.Where(sf => sf.AcademicYearId == academicYearId.Value);
+            List<Guid>? classSet = allowedClassIds?.ToList();
+            var tvp = new DataTable();
+            tvp.Columns.Add("Id", typeof(Guid));
+            if (classSet != null)
+                foreach (var id in classSet) tvp.Rows.Add(id);
 
-            if (classId.HasValue && classId.Value != Guid.Empty)
-                query = query.Where(sf => sf.FeeStructure.ClassId == classId.Value);
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", pageSize);
+            parameters.Add("@SearchTerm", string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim());
+            parameters.Add("@ClassId", classId.HasValue && classId.Value != Guid.Empty ? classId : null);
+            parameters.Add("@Status", string.IsNullOrWhiteSpace(status) ? null : status.Trim());
+            parameters.Add("@AcademicYearId", academicYearId.HasValue && academicYearId.Value != Guid.Empty ? academicYearId : null);
+            parameters.Add("@HasAllowedClassFilter", classSet != null);
+            parameters.Add("@AllowedClassIds", tvp.AsTableValuedParameter("dbo.GuidListType"));
 
-            if (allowedClassIds != null)
+            using var connection = await _sqlDataAccess.CreateOpenConnectionAsync();
+            using var multi = await connection.QueryMultipleAsync(
+                "dbo.sp_StudentFees_GetPaged", parameters, commandType: CommandType.StoredProcedure);
+
+            var totalCount = await multi.ReadSingleAsync<int>();
+            var feeRows = (await multi.ReadAsync<StudentFeePagedRow>()).ToList();
+            var paymentRows = (await multi.ReadAsync<StudentFeePaymentRow>()).ToList();
+            var discountRows = (await multi.ReadAsync<StudentFeeDiscountRow>()).ToList();
+            var paymentsByFee = paymentRows.ToLookup(r => r.StudentFeeId);
+            var discountsByFee = discountRows.ToLookup(r => r.StudentFeeId);
+
+            var items = feeRows.Select(r => new StudentFee
             {
-                var classSet = allowedClassIds.ToList();
-                if (classSet.Count > 0)
-                    query = query.Where(sf => classSet.Contains(sf.FeeStructure.ClassId));
-                else
-                    query = query.Where(_ => false);
-            }
-
-            if (!string.IsNullOrWhiteSpace(status))
-            {
-                if (string.Equals(status, "Overdue", StringComparison.OrdinalIgnoreCase))
+                Id = r.Id,
+                StudentId = r.StudentId,
+                FeeStructureId = r.FeeStructureId,
+                FeeStructureLineId = r.FeeStructureLineId,
+                AcademicYearId = r.AcademicYearId,
+                TotalAmount = r.TotalAmount,
+                Amount = r.Amount,
+                PaidAmount = r.PaidAmount,
+                DiscountAmount = r.DiscountAmount,
+                OutstandingAmount = r.OutstandingAmount,
+                DueDate = r.DueDate,
+                Status = r.Status ?? string.Empty,
+                Remarks = r.Remarks ?? string.Empty,
+                BillingPeriodYear = r.BillingPeriodYear,
+                BillingPeriodMonth = r.BillingPeriodMonth,
+                InstallmentSequence = r.InstallmentSequence,
+                Source = r.Source ?? string.Empty,
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt,
+                Student = new sms.api.Models.Student
                 {
-                    var today = DateTime.UtcNow.Date;
-                    query = query.Where(sf => sf.OutstandingAmount > 0 && sf.DueDate.Date < today);
-                }
-                else
+                    Id = r.StudentId,
+                    RollNumber = r.Stu_RollNumber ?? string.Empty,
+                    RegistrationNumber = r.Stu_RegistrationNumber ?? string.Empty,
+                    User = new sms.api.Models.User { FirstName = r.Stu_FirstName ?? string.Empty, LastName = r.Stu_LastName ?? string.Empty, Email = r.Stu_Email ?? string.Empty },
+                },
+                FeeStructure = new FeeStructure
                 {
-                    query = query.Where(sf => sf.Status == status);
-                }
-            }
+                    Id = r.FeeStructureId,
+                    Name = r.FS_Name ?? string.Empty,
+                    Amount = r.FS_Amount,
+                    ClassId = r.FS_ClassId ?? Guid.Empty,
+                    Class = r.FS_ClassId.HasValue ? new sms.api.Models.Class { Id = r.FS_ClassId.Value, Name = r.Class_Name ?? string.Empty } : null,
+                },
+                Payments = paymentsByFee[r.Id].Select(p => new FeePayment
+                {
+                    Id = p.Id,
+                    StudentFeeId = p.StudentFeeId,
+                    AcademicYearId = p.AcademicYearId,
+                    Amount = p.Amount,
+                    PaymentDate = p.PaymentDate,
+                    PaymentMethod = p.PaymentMethod ?? string.Empty,
+                    TransactionReference = p.TransactionReference ?? string.Empty,
+                    ReceiptNumber = p.ReceiptNumber ?? string.Empty,
+                    Remarks = p.Remarks ?? string.Empty,
+                    ReceivedById = p.ReceivedById,
+                    CreatedAt = p.CreatedAt,
+                    UpdatedAt = p.UpdatedAt,
+                    IsVoided = p.IsVoided,
+                    VoidedAtUtc = p.VoidedAtUtc,
+                    VoidedById = p.VoidedById,
+                    VoidReason = p.VoidReason ?? string.Empty,
+                }).ToList(),
+                Discounts = discountsByFee[r.Id].Select(d => new FeeDiscount
+                {
+                    Id = d.Id,
+                    StudentFeeId = d.StudentFeeId,
+                    AcademicYearId = d.AcademicYearId,
+                    DiscountType = d.DiscountType ?? string.Empty,
+                    Amount = d.Amount,
+                    Percentage = d.Percentage,
+                    Reason = d.Reason ?? string.Empty,
+                    ApprovedById = d.ApprovedById,
+                    ApprovedDate = d.ApprovedDate,
+                    Remarks = d.Remarks ?? string.Empty,
+                    CreatedAt = d.CreatedAt,
+                    UpdatedAt = d.UpdatedAt,
+                }).ToList(),
+            }).ToList();
 
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            var totalPages = pageSize > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 0;
+            return new PagedResult<StudentFee>
             {
-                var term = searchTerm.Trim();
-                query = query.Where(sf =>
-                    (sf.Student.User.FirstName + " " + sf.Student.User.LastName).Contains(term) ||
-                    sf.Student.RollNumber.Contains(term) ||
-                    (sf.Student.RegistrationNumber != null && sf.Student.RegistrationNumber.Contains(term)) ||
-                    (sf.Student.User.Email != null && sf.Student.User.Email.Contains(term)));
-            }
-
-            query = query.OrderByDescending(sf => sf.DueDate).ThenBy(sf => sf.Student.User.LastName);
-            return await query.ToPagedResultAsync(pageNumber, pageSize);
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            };
         }
 
         public async Task<GenerateMonthlyDemandsResultDto> GenerateMissingMonthlyDemandsAsync(Guid academicYearId, int year, int month)

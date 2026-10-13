@@ -23,12 +23,14 @@ Legend: ⬜ Not started · 🔶 In progress · ✅ Done (SP + pagination + verif
 
 ## Tier 1 - Already paginated, highest traffic (convert LINQ → SP, same response contract, zero frontend risk)
 
+**Status: ✅ all 4 done and verified (2026-10-13).** Next up: Tier 2 (34 controllers).
+
 | Domain | Manager method | Controller route | Status |
 |---|---|---|---|
 | Students | `IStudentManager.GetPagedAsync` | `GET /api/students/paged` | ✅ `sp_Students_GetPaged` - verified: shape, totalCount(78), search unchanged |
 | Staff | `IStaffManager.GetPagedAsync` | `GET /api/staff/paged` | ✅ `sp_Staff_GetPaged` - verified: shape, totalCount(5), search unchanged |
 | Fee Payments | `IFeePaymentManager.GetPaymentsPagedAsync` | `GET /api/fee-payments/paged` | ✅ `sp_FeePayments_GetPaged` - endpoint verified (correct empty shape; DB has 0 payment rows right now so the full nested-row/receipts mapping is untested against real data - re-verify once real payments exist) |
-| Student Fees | `IStudentFeeManager.GetStudentFeesPagedAsync` | `GET /api/student-fees/paged` | ⬜ |
+| Student Fees | `IStudentFeeManager.GetStudentFeesPagedAsync` | `GET /api/fees/paged` | ✅ `sp_StudentFees_GetPaged` - verified against real data: totalCount(40), nested student/feeStructure/class correct |
 
 ## Tier 2 - Controller-level paged queries (pagination exists, but inline LINQ in controller - move to Manager + SP)
 
