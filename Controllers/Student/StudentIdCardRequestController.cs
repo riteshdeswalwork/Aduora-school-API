@@ -54,21 +54,8 @@ namespace sms.api.Controllers.Student
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
             if (!yearId.HasValue) return BadRequest(new { message = "Academic year not selected" });
 
-            var query = _context.StudentIdCardRequests.AsNoTracking().Where(x => x.AcademicYearId == yearId.Value);
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status == status);
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.CardNumber != null && x.CardNumber.ToLower().Contains(term)) ||
-                    (x.ChipUid != null && x.ChipUid.ToLower().Contains(term)) ||
-                    (x.Status != null && x.Status.ToLower().Contains(term)) ||
-                    (x.Notes != null && x.Notes.ToLower().Contains(term)) ||
-                    (x.IssueReason != null && x.IssueReason.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.RequestDate);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(yearId.Value, pageNumber, pageSize, searchTerm, status, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

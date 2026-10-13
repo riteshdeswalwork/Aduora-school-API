@@ -44,10 +44,10 @@ and the controller action reduced to a one-line call - response shape unchanged.
 | Enquiries | ✅ `sp_Enquiries_GetPaged` - verified (totalCount=2, real rows) |
 | Visitor Entries | ✅ `sp_VisitorEntries_GetPaged` - verified (totalCount=3, real rows) |
 | Homework Assignments | ✅ `sp_HomeworkAssignments_GetPaged` - verified (totalCount=4, real rows) |
-| Document Print Jobs | ⬜ |
+| Document Print Jobs | ✅ `sp_DocumentPrintJobs_GetPaged` - verified (totalCount=2, real rows) |
 | Work Allocations | ✅ `sp_WorkAllocations_GetPaged` - verified (totalCount=2, real rows) |
-| Student ID Card Requests | ⬜ |
-| PTM Feedback | ⬜ |
+| Student ID Card Requests | ✅ `sp_StudentIdCardRequests_GetPaged` - verified (totalCount=1, real rows) |
+| PTM Feedback | ✅ `sp_PtmFeedbacks_GetPaged` - verified (totalCount=3, real rows) |
 | Student Behavior Incidents | ⬜ |
 | Discipline Incidents | ⬜ |
 | Achievement/Talents | ⬜ |
