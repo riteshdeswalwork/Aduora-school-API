@@ -65,28 +65,10 @@ namespace sms.api.Controllers.Student
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
             if (!yearId.HasValue) return BadRequest(new { message = "Academic year not selected" });
 
-            var query = _context.StudentBehaviorIncidents.AsNoTracking().Where(x => x.AcademicYearId == yearId.Value);
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (studentId.HasValue) query = query.Where(x => x.StudentId == studentId.Value);
-            if (classId.HasValue) query = query.Where(x => x.ClassId == classId.Value);
-            if (fromDate.HasValue) query = query.Where(x => x.IncidentDate >= fromDate.Value);
-            if (toDate.HasValue) { var end = toDate.Value.Date.AddDays(1); query = query.Where(x => x.IncidentDate < end); }
-            if (severityIndex.HasValue) query = query.Where(x => x.SeverityIndex == severityIndex.Value);
-            if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status == status);
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.BehaviorType != null && x.BehaviorType.ToLower().Contains(term)) ||
-                    (x.Description != null && x.Description.ToLower().Contains(term)) ||
-                    (x.InterventionPlan != null && x.InterventionPlan.ToLower().Contains(term)) ||
-                    (x.Status != null && x.Status.ToLower().Contains(term)) ||
-                    (x.LocationOfIncident != null && x.LocationOfIncident.ToLower().Contains(term)) ||
-                    (x.ActionTaken != null && x.ActionTaken.ToLower().Contains(term)) ||
-                    (x.Notes != null && x.Notes.ToLower().Contains(term)));
-            }
-            query = ApplyIncludes(query).OrderByDescending(x => x.IncidentDate);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(
+                yearId.Value, pageNumber, pageSize, studentId, classId, fromDate, toDate,
+                severityIndex, searchTerm, status, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

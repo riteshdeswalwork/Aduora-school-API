@@ -58,28 +58,8 @@ namespace sms.api.Controllers.Student
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
             if (!yearId.HasValue) return BadRequest(new { message = "Academic year not selected" });
 
-            var query = _context.AchievementTalents.AsNoTracking().Where(x => x.AcademicYearId == yearId.Value);
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (!string.IsNullOrWhiteSpace(type))
-            {
-                var typeNorm = type.Trim();
-                query = query.Where(x => x.Type != null && x.Type.ToLower() == typeNorm.ToLower());
-            }
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.Title != null && x.Title.ToLower().Contains(term)) ||
-                    (x.Category != null && x.Category.ToLower().Contains(term)) ||
-                    (x.Level != null && x.Level.ToLower().Contains(term)) ||
-                    (x.Description != null && x.Description.ToLower().Contains(term)) ||
-                    (x.AwardedBy != null && x.AwardedBy.ToLower().Contains(term)) ||
-                    (x.EventName != null && x.EventName.ToLower().Contains(term)) ||
-                    (x.Position != null && x.Position.ToLower().Contains(term)) ||
-                    (x.Remarks != null && x.Remarks.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.AchievementDate);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(yearId.Value, pageNumber, pageSize, searchTerm, type, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

@@ -48,9 +48,9 @@ and the controller action reduced to a one-line call - response shape unchanged.
 | Work Allocations | ✅ `sp_WorkAllocations_GetPaged` - verified (totalCount=2, real rows) |
 | Student ID Card Requests | ✅ `sp_StudentIdCardRequests_GetPaged` - verified (totalCount=1, real rows) |
 | PTM Feedback | ✅ `sp_PtmFeedbacks_GetPaged` - verified (totalCount=3, real rows) |
-| Student Behavior Incidents | ⬜ |
-| Discipline Incidents | ⬜ |
-| Achievement/Talents | ⬜ |
+| Student Behavior Incidents | ✅ `sp_StudentBehaviorIncidents_GetPaged` - verified (shape, totalCount=0, 0 rows in DB currently) |
+| Discipline Incidents | ✅ `sp_DisciplineIncidents_GetPaged` - verified (totalCount=1, real rows) |
+| Achievement/Talents | ✅ `sp_AchievementTalents_GetPaged` - verified (totalCount=2, real rows) |
 | Co-Curricular Activities/Participation | ⬜ |
 | Scholarship/Applications | ⬜ |
 | Hostel/Hostel Rooms/Allocations | ⬜ |
