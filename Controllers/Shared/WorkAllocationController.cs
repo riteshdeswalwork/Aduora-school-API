@@ -40,28 +40,8 @@ namespace sms.api.Controllers.Shared
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] Guid? assignedToStaffId = null, [FromQuery] Guid? assignedToUserId = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.WorkAllocations.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status != null && x.Status.Trim().ToLower() == status.Trim().ToLower());
-            if (assignedToStaffId.HasValue) query = query.Where(x => x.AssignedToStaffId == assignedToStaffId.Value);
-            if (assignedToUserId.HasValue)
-            {
-                var staffId = await _context.Staff.AsNoTracking().Where(s => s.UserId == assignedToUserId.Value).Select(s => s.Id).FirstOrDefaultAsync();
-                if (staffId != default) query = query.Where(x => x.AssignedToStaffId == staffId);
-                else query = query.Where(x => false);
-            }
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.Title != null && x.Title.ToLower().Contains(term)) ||
-                    (x.Description != null && x.Description.ToLower().Contains(term)) ||
-                    (x.Priority != null && x.Priority.ToLower().Contains(term)) ||
-                    (x.Status != null && x.Status.ToLower().Contains(term)) ||
-                    (x.Complexity != null && x.Complexity.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.CreatedAt);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, searchTerm, status, assignedToStaffId, assignedToUserId, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

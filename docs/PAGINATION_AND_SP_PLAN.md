@@ -43,9 +43,9 @@ and the controller action reduced to a one-line call - response shape unchanged.
 |---|---|
 | Enquiries | ✅ `sp_Enquiries_GetPaged` - verified (totalCount=2, real rows) |
 | Visitor Entries | ✅ `sp_VisitorEntries_GetPaged` - verified (totalCount=3, real rows) |
-| Homework Assignments | ⬜ |
+| Homework Assignments | ✅ `sp_HomeworkAssignments_GetPaged` - verified (totalCount=4, real rows) |
 | Document Print Jobs | ⬜ |
-| Work Allocations | ⬜ |
+| Work Allocations | ✅ `sp_WorkAllocations_GetPaged` - verified (totalCount=2, real rows) |
 | Student ID Card Requests | ⬜ |
 | PTM Feedback | ⬜ |
 | Student Behavior Incidents | ⬜ |
