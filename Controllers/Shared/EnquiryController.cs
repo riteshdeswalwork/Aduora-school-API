@@ -46,29 +46,8 @@ namespace sms.api.Controllers.Shared
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] string? priority = null, [FromQuery] string? source = null, [FromQuery] bool? hasFollowUp = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.Enquiries.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status != null && x.Status.Trim().ToLower() == status.Trim().ToLower());
-            if (!string.IsNullOrWhiteSpace(priority)) query = query.Where(x => x.Priority != null && x.Priority.Trim().ToLower() == priority.Trim().ToLower());
-            if (!string.IsNullOrWhiteSpace(source)) query = query.Where(x => x.Source != null && x.Source.ToLower().Contains(source.Trim().ToLower()));
-            if (hasFollowUp == true) query = query.Where(x => x.FollowUpDate != null);
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.Name != null && x.Name.ToLower().Contains(term)) ||
-                    (x.ParentName != null && x.ParentName.ToLower().Contains(term)) ||
-                    (x.ContactNumber != null && x.ContactNumber.ToLower().Contains(term)) ||
-                    (x.Email != null && x.Email.ToLower().Contains(term)) ||
-                    (x.CurrentSchool != null && x.CurrentSchool.ToLower().Contains(term)) ||
-                    (x.SeekingClass != null && x.SeekingClass.ToLower().Contains(term)) ||
-                    (x.CourseInterested != null && x.CourseInterested.ToLower().Contains(term)) ||
-                    (x.Source != null && x.Source.ToLower().Contains(term)) ||
-                    (x.Status != null && x.Status.ToLower().Contains(term)) ||
-                    (x.Notes != null && x.Notes.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.EnquiryDate);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, searchTerm, status, priority, source, hasFollowUp, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

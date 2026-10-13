@@ -34,14 +34,36 @@ Legend: ⬜ Not started · 🔶 In progress · ✅ Done (SP + pagination + verif
 
 ## Tier 2 - Controller-level paged queries (pagination exists, but inline LINQ in controller - move to Manager + SP)
 
-Enquiries, Visitor Entries, Homework Assignments, Document Print Jobs, Work Allocations,
-Student ID Card Requests, PTM Feedback, Student Behavior Incidents, Discipline Incidents,
-Achievement/Talents, Co-Curricular Activities/Participation, Scholarship/Applications,
-Hostel/Hostel Rooms/Allocations, Asset/Asset Maintenance, Inventory Items/Transactions,
-Biometric Devices/Logs/UserMaps, Gallery Media, Invitees, Lecture Topics, Scheduled Services,
-Bus, Transfer Certificates. (34 controllers total - see `grep -rl pageNumber Controllers`.)
+34 controllers total (see `grep -rl pageNumber Controllers`). Converted one at a
+time; each gets a new `GetPagedAsync` on its Manager interface (previously the
+controller queried `_context` directly for these), a `sp_<Entity>_GetPaged.sql`,
+and the controller action reduced to a one-line call - response shape unchanged.
 
-Status: ⬜ not started (all)
+| Controller | Status |
+|---|---|
+| Enquiries | ✅ `sp_Enquiries_GetPaged` - verified (totalCount=2, real rows) |
+| Visitor Entries | ⬜ |
+| Homework Assignments | ⬜ |
+| Document Print Jobs | ⬜ |
+| Work Allocations | ⬜ |
+| Student ID Card Requests | ⬜ |
+| PTM Feedback | ⬜ |
+| Student Behavior Incidents | ⬜ |
+| Discipline Incidents | ⬜ |
+| Achievement/Talents | ⬜ |
+| Co-Curricular Activities/Participation | ⬜ |
+| Scholarship/Applications | ⬜ |
+| Hostel/Hostel Rooms/Allocations | ⬜ |
+| Asset/Asset Maintenance | ⬜ |
+| Inventory Items/Transactions | ⬜ |
+| Biometric Devices/Logs/UserMaps | ⬜ |
+| Gallery Media | ⬜ |
+| Invitees | ⬜ |
+| Lecture Topics | ⬜ |
+| Scheduled Services | ⬜ |
+| Bus | ⬜ |
+| Transfer Certificates | ⬜ |
+| OnlinePaymentTransaction | ⬜ |
 
 ## Tier 3 - Currently unpaginated, genuinely unbounded lists (needs NEW pagination + SP + frontend update)
 
