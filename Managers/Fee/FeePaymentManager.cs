@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.DTOs;
@@ -11,6 +12,7 @@ using sms.api.Interfaces.Student;
 using sms.api.Managers.Shared;
 using sms.api.Models;
 using sms.api.Services;
+using sms.api.Services.Data;
 using sms.api.Utils;
 using sms.api.Controllers.Fee;
 
@@ -20,11 +22,69 @@ namespace sms.api.Managers.Fee
     {
         private readonly IStudentFeeManager _studentFeeManager;
         private readonly INotificationOrchestrator? _notify;
+        private readonly ISqlDataAccess _sqlDataAccess;
 
-        public FeePaymentManager(ApplicationDbContext context, IStudentFeeManager studentFeeManager, INotificationOrchestrator? notify = null) : base(context)
+        public FeePaymentManager(ApplicationDbContext context, IStudentFeeManager studentFeeManager, ISqlDataAccess sqlDataAccess, INotificationOrchestrator? notify = null) : base(context)
         {
             _studentFeeManager = studentFeeManager;
+            _sqlDataAccess = sqlDataAccess;
             _notify = notify;
+        }
+
+        // Flat row shapes returned by dbo.sp_FeePayments_GetPaged.
+        private sealed class FeePaymentPagedRow
+        {
+            public Guid Id { get; set; }
+            public Guid StudentFeeId { get; set; }
+            public Guid AcademicYearId { get; set; }
+            public decimal Amount { get; set; }
+            public DateTime PaymentDate { get; set; }
+            public string? PaymentMethod { get; set; }
+            public string? TransactionReference { get; set; }
+            public string? ReceiptNumber { get; set; }
+            public string? Remarks { get; set; }
+            public Guid ReceivedById { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime? UpdatedAt { get; set; }
+            public bool IsVoided { get; set; }
+            public DateTime? VoidedAtUtc { get; set; }
+            public Guid? VoidedById { get; set; }
+            public string? VoidReason { get; set; }
+            public Guid? SF_Id { get; set; }
+            public Guid? SF_StudentId { get; set; }
+            public decimal SF_TotalAmount { get; set; }
+            public decimal SF_PaidAmount { get; set; }
+            public decimal SF_OutstandingAmount { get; set; }
+            public DateTime? SF_DueDate { get; set; }
+            public string? SF_Status { get; set; }
+            public Guid? Stu_Id { get; set; }
+            public string? Stu_FirstName { get; set; }
+            public string? Stu_LastName { get; set; }
+            public Guid? FS_Id { get; set; }
+            public string? FS_Name { get; set; }
+            public decimal FS_Amount { get; set; }
+            public Guid? FS_ClassId { get; set; }
+            public Guid? Class_Id { get; set; }
+            public string? Class_Name { get; set; }
+            public Guid? RB_Id { get; set; }
+            public string? RB_FirstName { get; set; }
+            public string? RB_LastName { get; set; }
+        }
+
+        private sealed class FeeReceiptRow
+        {
+            public Guid Id { get; set; }
+            public Guid PaymentId { get; set; }
+            public Guid AcademicYearId { get; set; }
+            public string? ReceiptNumber { get; set; }
+            public DateTime IssueDate { get; set; }
+            public decimal Amount { get; set; }
+            public string? Description { get; set; }
+            public Guid IssuedById { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime? UpdatedAt { get; set; }
+            public int ReprintCount { get; set; }
+            public DateTime? LastReprintAtUtc { get; set; }
         }
 
         public override async Task<IEnumerable<FeePayment>> GetAllAsync()
@@ -58,31 +118,95 @@ namespace sms.api.Managers.Fee
 
         public async Task<PagedResult<FeePayment>> GetPaymentsPagedAsync(int pageNumber, int pageSize, Guid? academicYearId, DateTime? fromDate, DateTime? toDate, Guid? classId)
         {
-            var query = _dbSet
-                .Include(fp => fp.StudentFee)
-                    .ThenInclude(sf => sf.Student)
-                        .ThenInclude(s => s.User)
-                .Include(fp => fp.StudentFee)
-                    .ThenInclude(sf => sf.FeeStructure)
-                        .ThenInclude(fs => fs.Class)
-                .Include(fp => fp.ReceivedBy)
-                .Include(fp => fp.Receipts)
-                .AsNoTracking()
-                .OrderByDescending(fp => fp.PaymentDate)
-                .AsQueryable();
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 20;
+            if (pageSize > 200) pageSize = 200;
 
-            if (academicYearId.HasValue && academicYearId.Value != Guid.Empty)
-                query = query.Where(fp => fp.AcademicYearId == academicYearId.Value);
-            if (fromDate.HasValue)
-                query = query.Where(fp => fp.PaymentDate.Date >= fromDate.Value.Date);
-            if (toDate.HasValue)
-                query = query.Where(fp => fp.PaymentDate.Date <= toDate.Value.Date);
-            if (classId.HasValue && classId.Value != Guid.Empty)
-                query = query.Where(fp => fp.StudentFee != null && fp.StudentFee.FeeStructure != null && fp.StudentFee.FeeStructure.ClassId == classId.Value);
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", pageSize);
+            parameters.Add("@AcademicYearId", academicYearId.HasValue && academicYearId.Value != Guid.Empty ? academicYearId : null);
+            parameters.Add("@FromDate", fromDate);
+            parameters.Add("@ToDate", toDate);
+            parameters.Add("@ClassId", classId.HasValue && classId.Value != Guid.Empty ? classId : null);
 
-            query = query.Where(fp => !fp.IsVoided);
+            using var connection = await _sqlDataAccess.CreateOpenConnectionAsync();
+            using var multi = await connection.QueryMultipleAsync(
+                "dbo.sp_FeePayments_GetPaged", parameters, commandType: System.Data.CommandType.StoredProcedure);
 
-            return await query.ToPagedResultAsync(pageNumber, pageSize);
+            var totalCount = await multi.ReadSingleAsync<int>();
+            var paymentRows = (await multi.ReadAsync<FeePaymentPagedRow>()).ToList();
+            var receiptRows = (await multi.ReadAsync<FeeReceiptRow>()).ToList();
+            var receiptsByPayment = receiptRows.ToLookup(r => r.PaymentId);
+
+            var items = paymentRows.Select(r => new FeePayment
+            {
+                Id = r.Id,
+                StudentFeeId = r.StudentFeeId,
+                AcademicYearId = r.AcademicYearId,
+                Amount = r.Amount,
+                PaymentDate = r.PaymentDate,
+                PaymentMethod = r.PaymentMethod ?? string.Empty,
+                TransactionReference = r.TransactionReference ?? string.Empty,
+                ReceiptNumber = r.ReceiptNumber ?? string.Empty,
+                Remarks = r.Remarks ?? string.Empty,
+                ReceivedById = r.ReceivedById,
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt,
+                IsVoided = r.IsVoided,
+                VoidedAtUtc = r.VoidedAtUtc,
+                VoidedById = r.VoidedById,
+                VoidReason = r.VoidReason ?? string.Empty,
+                StudentFee = r.SF_Id.HasValue ? new StudentFee
+                {
+                    Id = r.SF_Id.Value,
+                    StudentId = r.SF_StudentId ?? Guid.Empty,
+                    TotalAmount = r.SF_TotalAmount,
+                    PaidAmount = r.SF_PaidAmount,
+                    OutstandingAmount = r.SF_OutstandingAmount,
+                    DueDate = r.SF_DueDate ?? default,
+                    Status = r.SF_Status ?? string.Empty,
+                    Student = r.Stu_Id.HasValue ? new sms.api.Models.Student
+                    {
+                        Id = r.Stu_Id.Value,
+                        User = new sms.api.Models.User { FirstName = r.Stu_FirstName ?? string.Empty, LastName = r.Stu_LastName ?? string.Empty },
+                    } : null,
+                    FeeStructure = r.FS_Id.HasValue ? new FeeStructure
+                    {
+                        Id = r.FS_Id.Value,
+                        Name = r.FS_Name ?? string.Empty,
+                        Amount = r.FS_Amount,
+                        ClassId = r.FS_ClassId ?? Guid.Empty,
+                        Class = r.Class_Id.HasValue ? new sms.api.Models.Class { Id = r.Class_Id.Value, Name = r.Class_Name ?? string.Empty } : null,
+                    } : null,
+                } : null,
+                ReceivedBy = r.RB_Id.HasValue ? new sms.api.Models.User { Id = r.RB_Id.Value, FirstName = r.RB_FirstName ?? string.Empty, LastName = r.RB_LastName ?? string.Empty } : null,
+                Receipts = receiptsByPayment[r.Id].Select(rc => new FeeReceipt
+                {
+                    Id = rc.Id,
+                    PaymentId = rc.PaymentId,
+                    AcademicYearId = rc.AcademicYearId,
+                    ReceiptNumber = rc.ReceiptNumber ?? string.Empty,
+                    IssueDate = rc.IssueDate,
+                    Amount = rc.Amount,
+                    Description = rc.Description ?? string.Empty,
+                    IssuedById = rc.IssuedById,
+                    CreatedAt = rc.CreatedAt,
+                    UpdatedAt = rc.UpdatedAt,
+                    ReprintCount = rc.ReprintCount,
+                    LastReprintAtUtc = rc.LastReprintAtUtc,
+                }).ToList(),
+            }).ToList();
+
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+            return new PagedResult<FeePayment>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            };
         }
 
         public async Task<IEnumerable<FeePayment>> GetPaymentsByStudentFeeIdAsync(Guid studentFeeId)

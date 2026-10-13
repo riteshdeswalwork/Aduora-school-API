@@ -28,5 +28,12 @@ namespace sms.api.Services.Data
 
         /// <summary>Executes a stored procedure that doesn't return rows (e.g. a write proc).</summary>
         Task<int> ExecuteStoredProcAsync(string procedureName, object? parameters = null);
+
+        /// <summary>
+        /// Opens a raw connection for callers that need more than the page+count shape
+        /// (e.g. a third result set of child rows to attach to each parent row, such as
+        /// fee receipts per payment). Caller is responsible for disposing it.
+        /// </summary>
+        Task<IDbConnection> CreateOpenConnectionAsync();
     }
 }

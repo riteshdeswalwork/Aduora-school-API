@@ -43,5 +43,12 @@ namespace sms.api.Services.Data
             using var connection = CreateConnection();
             return await connection.ExecuteAsync(procedureName, parameters, commandType: CommandType.StoredProcedure);
         }
+
+        public async Task<IDbConnection> CreateOpenConnectionAsync()
+        {
+            var connection = CreateConnection();
+            await connection.OpenAsync();
+            return connection;
+        }
     }
 }
