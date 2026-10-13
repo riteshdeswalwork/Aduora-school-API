@@ -42,7 +42,7 @@ and the controller action reduced to a one-line call - response shape unchanged.
 | Controller | Status |
 |---|---|
 | Enquiries | ✅ `sp_Enquiries_GetPaged` - verified (totalCount=2, real rows) |
-| Visitor Entries | ⬜ |
+| Visitor Entries | ✅ `sp_VisitorEntries_GetPaged` - verified (totalCount=3, real rows) |
 | Homework Assignments | ⬜ |
 | Document Print Jobs | ⬜ |
 | Work Allocations | ⬜ |

@@ -47,26 +47,8 @@ namespace sms.api.Controllers.Shared
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] bool includeInactive = false, [FromQuery] bool activeOnly = false, [FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null)
         {
-            var query = _context.VisitorEntries.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (activeOnly) query = query.Where(x => x.Status == "In" && x.TimeOut == null);
-            if (fromDate.HasValue) query = query.Where(x => x.TimeIn >= fromDate.Value);
-            if (toDate.HasValue) { var end = toDate.Value.Date.AddDays(1); query = query.Where(x => x.TimeIn < end); }
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.VisitorName != null && x.VisitorName.ToLower().Contains(term)) ||
-                    (x.ContactNumber != null && x.ContactNumber.ToLower().Contains(term)) ||
-                    (x.Purpose != null && x.Purpose.ToLower().Contains(term)) ||
-                    (x.PersonToMeet != null && x.PersonToMeet.ToLower().Contains(term)) ||
-                    (x.VehicleNumber != null && x.VehicleNumber.ToLower().Contains(term)) ||
-                    (x.Address != null && x.Address.ToLower().Contains(term)) ||
-                    (x.IdNumber != null && x.IdNumber.ToLower().Contains(term)) ||
-                    (x.BadgeNumber != null && x.BadgeNumber.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.TimeIn);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, searchTerm, includeInactive, activeOnly, fromDate, toDate);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]
