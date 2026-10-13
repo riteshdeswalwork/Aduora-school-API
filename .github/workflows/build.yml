@@ -1,25 +1,193 @@
-name: Build
+
+name: Aduora School API - UAT Deploy
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches:
+      - UAT
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aduora-school-api-uat
+  cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: windows-latest
+  deploy:
+    name: Build and Deploy to Windows IIS
+    runs-on: [self-hosted, Windows, X64, aduora-school-api]
+    timeout-minutes: 30
+
+    env:
+      PROJECT_FILE: sms.api.csproj
+      DEPLOY_PATH: 'C:\inetpub\wwwroot\Aduora-School-Backend'
+      BACKUP_ROOT: 'C:\CI-CD\Backups\Aduora-School-Backend'
+      APP_POOL: api-school-aduora
+
     steps:
-      - name: Checkout
+      - name: Checkout UAT branch
         uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
+      - name: Verify .NET SDK and project
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
 
-      - name: Restore
-        run: dotnet restore sms.api.csproj
+          dotnet --info
 
-      - name: Build
-        run: dotnet build sms.api.csproj --configuration Release --no-restore
+          if (!(Test-Path $env:PROJECT_FILE)) {
+            throw "Project file not found: $env:PROJECT_FILE"
+          }
+
+          Write-Host "Project found: $env:PROJECT_FILE"
+
+      - name: Build and publish
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $publishPath = Join-Path $env:RUNNER_TEMP 'AduoraSchoolAPI-Publish'
+
+          if (Test-Path $publishPath) {
+            Remove-Item $publishPath -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Force `
+            -Path $publishPath | Out-Null
+
+          dotnet restore $env:PROJECT_FILE
+          if ($LASTEXITCODE -ne 0) {
+            throw "dotnet restore failed"
+          }
+
+          dotnet publish $env:PROJECT_FILE `
+            --configuration Release `
+            --no-restore `
+            --output $publishPath
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed"
+          }
+
+          if (!(Test-Path (Join-Path $publishPath 'sms.api.dll'))) {
+            throw "Published sms.api.dll not found"
+          }
+
+          if (!(Test-Path (Join-Path $publishPath 'web.config'))) {
+            throw "Published web.config not found"
+          }
+
+          Write-Host "Publish validation successful."
+
+      - name: Backup and deploy
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          Import-Module WebAdministration
+
+          $publishPath = Join-Path $env:RUNNER_TEMP 'AduoraSchoolAPI-Publish'
+          $target = $env:DEPLOY_PATH
+          $backupRoot = $env:BACKUP_ROOT
+          $pool = $env:APP_POOL
+
+          $poolPath = "IIS:\AppPools\$pool"
+
+          if (!(Test-Path $poolPath)) {
+            throw "IIS App Pool not found: $pool"
+          }
+
+          if (!(Test-Path $target)) {
+            throw "Existing deployment folder not found: $target"
+          }
+
+          New-Item -ItemType Directory -Force `
+            -Path $backupRoot | Out-Null
+
+          $backup = Join-Path $backupRoot `
+            (Get-Date -Format 'yyyyMMdd-HHmmss')
+
+          New-Item -ItemType Directory -Force `
+            -Path $backup | Out-Null
+
+          $poolWasStarted = (
+            (Get-WebAppPoolState -Name $pool).Value -eq 'Started'
+          )
+
+          $backupCreated = $false
+
+          try {
+            # Preserve the existing deployed files first.
+            robocopy $target $backup /E /COPY:DAT /DCOPY:DAT /R:2 /W:2
+            if ($LASTEXITCODE -ge 8) {
+              throw "Backup failed. Existing deployment left untouched."
+            }
+
+            $backupCreated = $true
+            Write-Host "Backup created: $backup"
+
+            # Stop only this application's App Pool.
+            if ($poolWasStarted) {
+              Stop-WebAppPool -Name $pool
+
+              $deadline = (Get-Date).AddSeconds(60)
+              do {
+                Start-Sleep -Seconds 2
+                $state = (Get-WebAppPoolState -Name $pool).Value
+              } while ($state -ne 'Stopped' -and (Get-Date) -lt $deadline)
+
+              if ($state -ne 'Stopped') {
+                throw "App Pool did not stop in time."
+              }
+            }
+
+            # Deploy the validated published output.
+            robocopy $publishPath $target /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:2
+            if ($LASTEXITCODE -ge 8) {
+              throw "Deployment copy failed."
+            }
+
+            if (!(Test-Path (Join-Path $target 'sms.api.dll'))) {
+              throw "Deployment validation failed: sms.api.dll missing."
+            }
+
+            Write-Host "Deployment files copied successfully."
+          }
+          catch {
+            Write-Error $_
+
+            if ($backupCreated) {
+              Write-Warning "Attempting rollback from: $backup"
+
+              robocopy $backup $target /MIR /COPY:DAT /DCOPY:DAT /R:2 /W:2
+              if ($LASTEXITCODE -ge 8) {
+                Write-Error "Rollback copy failed. Manual recovery required."
+              }
+            }
+
+            throw
+          }
+          finally {
+            if ($poolWasStarted) {
+              Start-WebAppPool -Name $pool
+            }
+          }
+
+          Write-Host "Deployment completed."
+          Write-Host "Backup location: $backup"
+
+      - name: Verify deployment files
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $dll = Join-Path $env:DEPLOY_PATH 'sms.api.dll'
+
+          if (!(Test-Path $dll)) {
+            throw "Deployment verification failed: $dll missing"
+          }
+
+          Get-Item $dll |
+            Select-Object FullName, Length, LastWriteTime
