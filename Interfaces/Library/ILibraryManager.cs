@@ -68,6 +68,7 @@ namespace sms.api.Interfaces.Library
         Task<bool> CancelBookReservationAsync(Guid id, string? reason = null, Guid? cancelledByUserId = null);
         Task<BookIssueDTO?> FulfillBookReservationAsync(Guid reservationId, Guid fulfilledByUserId);
         Task<IEnumerable<LibraryFineDTO>> GetAllLibraryFinesAsync();
+        Task<PagedResult<LibraryFineDTO>> GetLibraryFinesPagedAsync(int pageNumber, int pageSize, string? searchTerm = null, Guid? libraryMemberId = null, string? status = null);
         Task<LibraryFineDTO?> GetLibraryFineByIdAsync(Guid id);
         Task<IEnumerable<LibraryFineDTO>> GetLibraryFinesByMemberAsync(Guid memberId);
         Task<IEnumerable<LibraryFineDTO>> GetPendingLibraryFinesAsync();
