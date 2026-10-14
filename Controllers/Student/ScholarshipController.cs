@@ -42,18 +42,8 @@ namespace sms.api.Controllers.Student
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.Scholarships.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.Name != null && x.Name.ToLower().Contains(term)) ||
-                    (x.Provider != null && x.Provider.ToLower().Contains(term)) ||
-                    (x.EligibilityCriteria != null && x.EligibilityCriteria.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.CreatedAt);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, searchTerm, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

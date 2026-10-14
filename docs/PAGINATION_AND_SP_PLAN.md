@@ -51,8 +51,8 @@ and the controller action reduced to a one-line call - response shape unchanged.
 | Student Behavior Incidents | ✅ `sp_StudentBehaviorIncidents_GetPaged` - verified (shape, totalCount=0, 0 rows in DB currently) |
 | Discipline Incidents | ✅ `sp_DisciplineIncidents_GetPaged` - verified (totalCount=1, real rows) |
 | Achievement/Talents | ✅ `sp_AchievementTalents_GetPaged` - verified (totalCount=2, real rows) |
-| Co-Curricular Activities/Participation | ⬜ |
-| Scholarship/Applications | ⬜ |
+| Co-Curricular Activities/Participation | ✅ `sp_CoCurricularActivities_GetPaged` (totalCount=2), `sp_CoCurricularParticipations_GetPaged` (shape, 0 rows) |
+| Scholarship/Applications | ✅ `sp_Scholarships_GetPaged` (totalCount=2), `sp_ScholarshipApplications_GetPaged` (totalCount=1) |
 | Hostel/Hostel Rooms/Allocations | ⬜ |
 | Asset/Asset Maintenance | ⬜ |
 | Inventory Items/Transactions | ⬜ |
