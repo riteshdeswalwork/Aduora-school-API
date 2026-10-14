@@ -132,6 +132,25 @@ namespace sms.api.Controllers.Library
             }
         }
 
+        [HttpGet("issues/paged")]
+        public async Task<IActionResult> GetIssuesPaged(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] Guid? libraryMemberId = null,
+            [FromQuery] bool? isReturned = null)
+        {
+            try
+            {
+                var result = await _libraryManager.GetBookIssuesPagedAsync(pageNumber, pageSize, searchTerm, libraryMemberId, isReturned);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving book issues", error = ex.Message });
+            }
+        }
+
         [HttpGet("issues/{id}")]
         public async Task<IActionResult> GetIssueById(Guid id)
         {

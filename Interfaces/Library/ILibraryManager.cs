@@ -49,6 +49,7 @@ namespace sms.api.Interfaces.Library
         Task<bool> SuspendLibraryMemberAsync(Guid id, string reason, DateTime? suspensionEndDate = null);
         Task<bool> ReactivateLibraryMemberAsync(Guid id);
         Task<IEnumerable<BookIssueDTO>> GetAllBookIssuesAsync();
+        Task<PagedResult<BookIssueDTO>> GetBookIssuesPagedAsync(int pageNumber, int pageSize, string? searchTerm = null, Guid? libraryMemberId = null, bool? isReturned = null);
         Task<BookIssueDTO?> GetBookIssueByIdAsync(Guid id);
         Task<IEnumerable<BookIssueDTO>> GetBookIssuesByMemberAsync(Guid memberId);
         Task<IEnumerable<BookIssueDTO>> GetBookIssuesByBookAsync(Guid bookId);
