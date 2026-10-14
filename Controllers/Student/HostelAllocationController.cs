@@ -42,12 +42,8 @@ namespace sms.api.Controllers.Student
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
             if (!yearId.HasValue) return BadRequest(new { message = "Academic year not selected" });
 
-            var query = _context.HostelAllocations.AsNoTracking().Where(x => x.AcademicYearId == yearId.Value);
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (hostelRoomId.HasValue) query = query.Where(x => x.HostelRoomId == hostelRoomId.Value);
-            if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status == status);
-            query = query.OrderByDescending(x => x.FromDate);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(yearId.Value, pageNumber, pageSize, hostelRoomId, status, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

@@ -43,19 +43,8 @@ namespace sms.api.Controllers.Student
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? hostelId = null, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.HostelRooms.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (hostelId.HasValue) query = query.Where(x => x.HostelId == hostelId.Value);
-            if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status == status);
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.RoomNumber != null && x.RoomNumber.ToLower().Contains(term)) ||
-                    (x.RoomType != null && x.RoomType.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.CreatedAt);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, hostelId, searchTerm, status, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]
