@@ -62,6 +62,7 @@ namespace sms.api.Interfaces.Library
         Task<bool> ReportLostBookAsync(Guid issueId, string description, decimal? replacementCost = null);
         Task<bool> ReportDamagedBookAsync(Guid issueId, string description, decimal? repairCost = null);
         Task<IEnumerable<BookReservationDTO>> GetAllBookReservationsAsync();
+        Task<PagedResult<BookReservationDTO>> GetBookReservationsPagedAsync(int pageNumber, int pageSize, string? searchTerm = null, Guid? libraryMemberId = null, string? status = null);
         Task<BookReservationDTO?> GetBookReservationByIdAsync(Guid id);
         Task<IEnumerable<BookReservationDTO>> GetBookReservationsByMemberAsync(Guid memberId);
         Task<IEnumerable<BookReservationDTO>> GetBookReservationsByBookAsync(Guid bookId);
