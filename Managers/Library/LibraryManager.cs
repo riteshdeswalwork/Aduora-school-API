@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.DTOs;
@@ -11,10 +12,12 @@ namespace sms.api.Managers.Library
     public class LibraryManager : ILibraryManager
     {
         private readonly ApplicationDbContext _context;
+        private readonly sms.api.Services.Data.ISqlDataAccess _sqlDataAccess;
 
-        public LibraryManager(ApplicationDbContext context)
+        public LibraryManager(ApplicationDbContext context, sms.api.Services.Data.ISqlDataAccess sqlDataAccess)
         {
             _context = context;
+            _sqlDataAccess = sqlDataAccess;
         }
 
         #region Dashboard
@@ -822,6 +825,65 @@ namespace sms.api.Managers.Library
                 .OrderByDescending(r => r.ReservationDate)
                 .ToListAsync();
             return reservations.Select(MapBookReservationToDTO);
+        }
+
+        // Flat row returned by dbo.sp_BookReservations_GetPaged: raw BookReservations
+        // columns + the joined fields MapBookReservationToDTO reads via navigations.
+        private sealed class BookReservationPagedRow : BookReservation
+        {
+            public string? JoinedBookTitle { get; set; } // not "BookTitle": that is a computed property on BookReservation
+            public bool BookIsAvailable { get; set; }
+            public Guid MemberUserId { get; set; }
+            public string? MemberFirstName { get; set; }
+            public string? MemberLastName { get; set; }
+            public string? FulfilledByFirstName { get; set; }
+            public string? FulfilledByLastName { get; set; }
+        }
+
+        public async Task<PagedResult<BookReservationDTO>> GetBookReservationsPagedAsync(
+            int pageNumber, int pageSize, string? searchTerm = null, Guid? libraryMemberId = null, string? status = null)
+        {
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 20;
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", pageSize);
+            parameters.Add("@SearchTerm", string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim());
+            parameters.Add("@LibraryMemberId", libraryMemberId.HasValue && libraryMemberId.Value != Guid.Empty ? libraryMemberId : null);
+            parameters.Add("@Status", string.IsNullOrWhiteSpace(status) ? null : status.Trim());
+            // Mirrors the EF global query filter on BookReservation/LibraryMember.
+            parameters.Add("@AcademicYearId", _context.CurrentAcademicYearId);
+
+            var (rows, totalCount) = await _sqlDataAccess.QueryPagedStoredProcAsync<BookReservationPagedRow>(
+                "dbo.sp_BookReservations_GetPaged", parameters);
+
+            // Rebuild the navigations the original .Include()s populated (Book,
+            // LibraryMember.User, FulfilledBy) and reuse the existing mapper so the
+            // entity's computed properties produce identical output.
+            var items = rows.Select(row =>
+            {
+                row.Book = new Book { Id = row.BookId, Title = row.JoinedBookTitle ?? string.Empty, IsAvailable = row.BookIsAvailable };
+                row.LibraryMember = new LibraryMember
+                {
+                    Id = row.LibraryMemberId,
+                    UserId = row.MemberUserId,
+                    User = new User { Id = row.MemberUserId, FirstName = row.MemberFirstName ?? string.Empty, LastName = row.MemberLastName ?? string.Empty }
+                };
+                row.FulfilledBy = row.FulfilledByUserId.HasValue
+                    ? new User { Id = row.FulfilledByUserId.Value, FirstName = row.FulfilledByFirstName ?? string.Empty, LastName = row.FulfilledByLastName ?? string.Empty }
+                    : null;
+                return MapBookReservationToDTO(row);
+            }).ToList();
+
+            return new PagedResult<BookReservationDTO>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+            };
         }
 
         public async Task<BookReservationDTO?> GetBookReservationByIdAsync(Guid id)

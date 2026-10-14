@@ -198,6 +198,25 @@ namespace sms.api.Controllers.Library
             }
         }
 
+        [HttpGet("reservations/paged")]
+        public async Task<IActionResult> GetReservationsPaged(
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 20,
+            [FromQuery] string? searchTerm = null,
+            [FromQuery] Guid? libraryMemberId = null,
+            [FromQuery] string? status = null)
+        {
+            try
+            {
+                var result = await _libraryManager.GetBookReservationsPagedAsync(pageNumber, pageSize, searchTerm, libraryMemberId, status);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving book reservations", error = ex.Message });
+            }
+        }
+
         [HttpGet("reservations/{id}")]
         public async Task<IActionResult> GetReservationById(Guid id)
         {
