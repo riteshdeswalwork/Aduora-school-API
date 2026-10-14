@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.DTOs;
@@ -5,16 +6,19 @@ using sms.api.Interfaces.Library;
 using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
 using sms.api.Models;
+using sms.api.Services.Data;
 
 namespace sms.api.Managers.Library
 {
     public class LibraryManager : ILibraryManager
     {
         private readonly ApplicationDbContext _context;
+        private readonly ISqlDataAccess _sqlDataAccess;
 
-        public LibraryManager(ApplicationDbContext context)
+        public LibraryManager(ApplicationDbContext context, ISqlDataAccess sqlDataAccess)
         {
             _context = context;
+            _sqlDataAccess = sqlDataAccess;
         }
 
         #region Dashboard
@@ -847,6 +851,114 @@ namespace sms.api.Managers.Library
                 .OrderByDescending(f => f.FineDate)
                 .ToListAsync();
             return fines.Select(MapLibraryFineToDTO);
+        }
+
+        private sealed class LibraryFinePagedRow
+        {
+            public Guid Id { get; set; }
+            public Guid LibraryMemberId { get; set; }
+            public Guid AcademicYearId { get; set; }
+            public Guid? BookIssueId { get; set; }
+            public string FineNumber { get; set; } = string.Empty;
+            public string FineType { get; set; } = string.Empty;
+            public decimal Amount { get; set; }
+            public decimal PaidAmount { get; set; }
+            public decimal PendingAmount { get; set; }
+            public string Status { get; set; } = string.Empty;
+            public DateTime FineDate { get; set; }
+            public DateTime? DueDate { get; set; }
+            public DateTime? PaidDate { get; set; }
+            public string? Description { get; set; }
+            public string? Reason { get; set; }
+            public int? OverdueDays { get; set; }
+            public bool IsWaived { get; set; }
+            public string? WaiverReason { get; set; }
+            public bool IsAppealed { get; set; }
+            public string? AppealStatus { get; set; }
+            public Guid CreatedByUserId { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime? UpdatedAt { get; set; }
+            public Guid MemberUserId { get; set; }
+            public string? MemberFirstName { get; set; }
+            public string? MemberLastName { get; set; }
+            public Guid? BookIssueBookId { get; set; }
+            public string? BookTitle { get; set; }
+        }
+
+        // SP-backed paged variant of GetAllLibraryFinesAsync (dbo.sp_LibraryFines_GetPaged).
+        // Rebuilds the LibraryFine -> LibraryMember -> User and BookIssue -> Book graph from
+        // flat rows so the existing MapLibraryFineToDTO (and the entity's computed props) is reused.
+        public async Task<PagedResult<LibraryFineDTO>> GetLibraryFinesPagedAsync(int pageNumber, int pageSize, string? searchTerm = null, Guid? libraryMemberId = null, string? status = null)
+        {
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 20;
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", pageSize);
+            parameters.Add("@SearchTerm", string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim());
+            parameters.Add("@LibraryMemberId", libraryMemberId);
+            parameters.Add("@Status", string.IsNullOrWhiteSpace(status) ? null : status.Trim());
+
+            var (rows, totalCount) = await _sqlDataAccess.QueryPagedStoredProcAsync<LibraryFinePagedRow>(
+                "dbo.sp_LibraryFines_GetPaged", parameters);
+
+            var items = rows.Select(r => MapLibraryFineToDTO(new LibraryFine
+            {
+                Id = r.Id,
+                LibraryMemberId = r.LibraryMemberId,
+                AcademicYearId = r.AcademicYearId,
+                BookIssueId = r.BookIssueId,
+                FineNumber = r.FineNumber,
+                FineType = r.FineType,
+                Amount = r.Amount,
+                PaidAmount = r.PaidAmount,
+                PendingAmount = r.PendingAmount,
+                Status = r.Status,
+                FineDate = r.FineDate,
+                DueDate = r.DueDate,
+                PaidDate = r.PaidDate,
+                Description = r.Description,
+                Reason = r.Reason,
+                OverdueDays = r.OverdueDays,
+                IsWaived = r.IsWaived,
+                WaiverReason = r.WaiverReason,
+                IsAppealed = r.IsAppealed,
+                AppealStatus = r.AppealStatus,
+                CreatedByUserId = r.CreatedByUserId,
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt,
+                LibraryMember = new LibraryMember
+                {
+                    Id = r.LibraryMemberId,
+                    UserId = r.MemberUserId,
+                    User = new User
+                    {
+                        Id = r.MemberUserId,
+                        FirstName = r.MemberFirstName ?? string.Empty,
+                        LastName = r.MemberLastName ?? string.Empty
+                    }
+                },
+                BookIssue = r.BookIssueId.HasValue
+                    ? new BookIssue
+                    {
+                        Id = r.BookIssueId.Value,
+                        BookId = r.BookIssueBookId ?? Guid.Empty,
+                        Book = r.BookIssueBookId.HasValue
+                            ? new Book { Id = r.BookIssueBookId.Value, Title = r.BookTitle ?? string.Empty }
+                            : null!
+                    }
+                    : null
+            })).ToList();
+
+            return new PagedResult<LibraryFineDTO>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+            };
         }
 
         public async Task<LibraryFineDTO?> GetLibraryFineByIdAsync(Guid id)
