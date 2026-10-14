@@ -61,9 +61,11 @@ and the controller action reduced to a one-line call - response shape unchanged.
 | Invitees | ✅ `sp_Invitees_GetPaged` (totalCount=2) |
 | Lecture Topics | ✅ `sp_LectureTopics_GetPaged` (totalCount=5) |
 | Scheduled Services | ✅ `sp_ScheduledServices_GetPaged` (totalCount=2) |
-| Bus | ⬜ |
-| Transfer Certificates | ⬜ |
-| OnlinePaymentTransaction | ⬜ |
+| Bus (maintenance/paged - was true in-memory paging, now real SQL paging) | ✅ `sp_BusMaintenanceRecords_GetPaged` (totalCount=0, shape) |
+| Transfer Certificates | ✅ `sp_TransferCertificates_GetPaged` (totalCount=1) |
+| OnlinePaymentTransaction | ✅ `sp_OnlinePaymentTransactions_GetPaged` (totalCount=2) |
+
+**Tier 2 status: ✅ all 34 done and verified (2026-10-14).**
 
 ## Tier 3 - Currently unpaginated, genuinely unbounded lists (needs NEW pagination + SP + frontend update)
 

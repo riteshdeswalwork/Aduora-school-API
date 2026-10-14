@@ -192,17 +192,14 @@ namespace sms.api.Controllers.Bus
         {
             try
             {
-                var all = await _busManager.GetAllMaintenanceRecordsAsync(busId, searchTerm, maintenanceType);
-                var list = all.ToList();
-                var totalCount = list.Count;
-                var items = list.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToList();
-                var totalPages = pageSize > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 0;
-                var first = totalCount == 0 ? 0 : (pageNumber - 1) * pageSize + 1;
-                var last = totalCount == 0 ? 0 : Math.Min(pageNumber * pageSize, totalCount);
+                var result = await _busManager.GetMaintenanceRecordsPagedAsync(pageNumber, pageSize, busId, searchTerm, maintenanceType);
+                var totalPages = result.TotalPages;
+                var first = result.TotalCount == 0 ? 0 : (pageNumber - 1) * pageSize + 1;
+                var last = result.TotalCount == 0 ? 0 : Math.Min(pageNumber * pageSize, result.TotalCount);
                 return Ok(new
                 {
-                    items,
-                    totalCount,
+                    items = result.Items,
+                    totalCount = result.TotalCount,
                     pageNumber,
                     pageSize,
                     totalPages,

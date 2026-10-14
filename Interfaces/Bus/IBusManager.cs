@@ -16,6 +16,7 @@ namespace sms.api.Interfaces.Bus
         Task<bool> SetBusAvailabilityAsync(Guid busId, bool isAvailable);
         Task<IEnumerable<BusMaintenanceDTO>> GetBusMaintenanceRecordsAsync(Guid busId);
         Task<IEnumerable<BusMaintenanceDTO>> GetAllMaintenanceRecordsAsync(Guid? busId = null, string? searchTerm = null, string? maintenanceType = null);
+        Task<PagedResult<BusMaintenanceDTO>> GetMaintenanceRecordsPagedAsync(int pageNumber, int pageSize, Guid? busId, string? searchTerm, string? maintenanceType);
         Task<BusMaintenanceDTO?> GetMaintenanceRecordByIdAsync(Guid id);
         Task<BusMaintenanceDTO> CreateMaintenanceRecordAsync(CreateBusMaintenanceDTO createDto, Guid createdByUserId);
         Task<BusMaintenanceDTO?> UpdateMaintenanceRecordAsync(Guid id, UpdateBusMaintenanceDTO updateDto, Guid updatedByUserId);

@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.DTOs;
@@ -5,14 +6,45 @@ using sms.api.Interfaces.Bus;
 using sms.api.Interfaces.Shared;
 using sms.api.Managers.Shared;
 using sms.api.Models;
+using sms.api.Services.Data;
 using BusEntity = sms.api.Models.Bus;
 
 namespace sms.api.Managers.Bus
 {
     public class BusManager : GenericManager<BusEntity>, IBusManager
     {
-        public BusManager(ApplicationDbContext context) : base(context)
+        private readonly ISqlDataAccess _sqlDataAccess;
+
+        public BusManager(ApplicationDbContext context, ISqlDataAccess sqlDataAccess) : base(context)
         {
+            _sqlDataAccess = sqlDataAccess;
+        }
+
+        public async Task<PagedResult<BusMaintenanceDTO>> GetMaintenanceRecordsPagedAsync(
+            int pageNumber, int pageSize, Guid? busId, string? searchTerm, string? maintenanceType)
+        {
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 20;
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", pageSize);
+            parameters.Add("@BusId", busId);
+            parameters.Add("@SearchTerm", string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim());
+            parameters.Add("@MaintenanceType", string.IsNullOrWhiteSpace(maintenanceType) ? null : maintenanceType.Trim());
+
+            var (items, totalCount) = await _sqlDataAccess.QueryPagedStoredProcAsync<BusMaintenanceDTO>(
+                "dbo.sp_BusMaintenanceRecords_GetPaged", parameters);
+
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+            return new PagedResult<BusMaintenanceDTO>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            };
         }
 
         public async Task<IEnumerable<BusDTO>> GetAllBusesAsync()
