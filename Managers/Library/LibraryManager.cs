@@ -798,6 +798,125 @@ namespace sms.api.Managers.Library
             return issues.Select(MapBookIssueToDTO);
         }
 
+        /// <summary>
+        /// Flat row returned by dbo.sp_BookIssues_GetPaged: raw BookIssue columns plus the joined
+        /// Book / LibraryMember / member User / issuer User columns needed to rebuild the entity graph.
+        /// </summary>
+        private sealed class BookIssuePagedRow
+        {
+            public Guid Id { get; set; }
+            public Guid BookId { get; set; }
+            public Guid LibraryMemberId { get; set; }
+            public Guid AcademicYearId { get; set; }
+            public string IssueNumber { get; set; } = string.Empty;
+            public DateTime IssueDate { get; set; }
+            public DateTime DueDate { get; set; }
+            public DateTime? ReturnDate { get; set; }
+            public bool IsReturned { get; set; }
+            public bool IsActive { get; set; }
+            public int RenewalCount { get; set; }
+            public bool HasFine { get; set; }
+            public decimal FineAmount { get; set; }
+            public decimal PaidFineAmount { get; set; }
+            public decimal PendingFineAmount { get; set; }
+            public string? FineReason { get; set; }
+            public string IssueCondition { get; set; } = string.Empty;
+            public string? ReturnCondition { get; set; }
+            public bool IsLost { get; set; }
+            public bool IsDamaged { get; set; }
+            public Guid IssuedByUserId { get; set; }
+            public DateTime CreatedAt { get; set; }
+            public DateTime? UpdatedAt { get; set; }
+            public string BookTitle { get; set; } = string.Empty;
+            public string BookISBN { get; set; } = string.Empty;
+            public Guid MemberUserId { get; set; }
+            public string MembershipNumber { get; set; } = string.Empty;
+            public bool MemberIsActive { get; set; }
+            public bool MemberIsSuspended { get; set; }
+            public int MemberMaxBooksAllowed { get; set; }
+            public int MemberMaxIssueDays { get; set; }
+            public int MemberMaxRenewalCount { get; set; }
+            public int MemberCurrentBooksIssued { get; set; }
+            public decimal MemberPendingFineAmount { get; set; }
+            public string MemberFirstName { get; set; } = string.Empty;
+            public string MemberLastName { get; set; } = string.Empty;
+            public string IssuedByFirstName { get; set; } = string.Empty;
+            public string IssuedByLastName { get; set; } = string.Empty;
+        }
+
+        public async Task<PagedResult<BookIssueDTO>> GetBookIssuesPagedAsync(
+            int pageNumber, int pageSize, string? searchTerm = null, Guid? libraryMemberId = null, bool? isReturned = null)
+        {
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 20;
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", pageSize);
+            parameters.Add("@SearchTerm", string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim());
+            parameters.Add("@LibraryMemberId", libraryMemberId);
+            parameters.Add("@IsReturned", isReturned);
+            // Preserve the EF academic-year global query filter (BookIssue + LibraryMember).
+            parameters.Add("@AcademicYearId", _context.CurrentAcademicYearId);
+
+            var (rows, totalCount) = await _sqlDataAccess.QueryPagedStoredProcAsync<BookIssuePagedRow>(
+                "dbo.sp_BookIssues_GetPaged", parameters);
+
+            // Rebuild the entity graph so the entity's computed properties (IsOverdue, Status,
+            // CanBeRenewed, NeedsAttention, ...) and the existing MapBookIssueToDTO are reused as-is.
+            var items = rows.Select(r => MapBookIssueToDTO(new BookIssue
+            {
+                Id = r.Id,
+                BookId = r.BookId,
+                LibraryMemberId = r.LibraryMemberId,
+                AcademicYearId = r.AcademicYearId,
+                IssueNumber = r.IssueNumber,
+                IssueDate = r.IssueDate,
+                DueDate = r.DueDate,
+                ReturnDate = r.ReturnDate,
+                IsReturned = r.IsReturned,
+                IsActive = r.IsActive,
+                RenewalCount = r.RenewalCount,
+                HasFine = r.HasFine,
+                FineAmount = r.FineAmount,
+                PaidFineAmount = r.PaidFineAmount,
+                PendingFineAmount = r.PendingFineAmount,
+                FineReason = r.FineReason,
+                IssueCondition = r.IssueCondition,
+                ReturnCondition = r.ReturnCondition,
+                IsLost = r.IsLost,
+                IsDamaged = r.IsDamaged,
+                IssuedByUserId = r.IssuedByUserId,
+                CreatedAt = r.CreatedAt,
+                UpdatedAt = r.UpdatedAt,
+                Book = new Book { Id = r.BookId, Title = r.BookTitle, ISBN = r.BookISBN },
+                LibraryMember = new LibraryMember
+                {
+                    Id = r.LibraryMemberId,
+                    UserId = r.MemberUserId,
+                    MembershipNumber = r.MembershipNumber,
+                    IsActive = r.MemberIsActive,
+                    IsSuspended = r.MemberIsSuspended,
+                    MaxBooksAllowed = r.MemberMaxBooksAllowed,
+                    MaxIssueDays = r.MemberMaxIssueDays,
+                    MaxRenewalCount = r.MemberMaxRenewalCount,
+                    CurrentBooksIssued = r.MemberCurrentBooksIssued,
+                    PendingFineAmount = r.MemberPendingFineAmount,
+                    User = new User { Id = r.MemberUserId, FirstName = r.MemberFirstName, LastName = r.MemberLastName }
+                },
+                IssuedBy = new User { Id = r.IssuedByUserId, FirstName = r.IssuedByFirstName, LastName = r.IssuedByLastName }
+            })).ToList();
+
+            return new PagedResult<BookIssueDTO>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
+            };
+        }
+
         public async Task<BookIssueDTO?> GetBookIssueByIdAsync(Guid id)
         {
             var issue = await _context.BookIssues
