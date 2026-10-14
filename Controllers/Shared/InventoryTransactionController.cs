@@ -39,23 +39,8 @@ namespace sms.api.Controllers.Shared
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? inventoryItemId = null, [FromQuery] string? transactionType = null, [FromQuery] string? searchTerm = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.InventoryTransactions.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (inventoryItemId.HasValue) query = query.Where(x => x.InventoryItemId == inventoryItemId.Value);
-            if (!string.IsNullOrWhiteSpace(transactionType))
-            {
-                var t = transactionType.Trim().ToUpper();
-                if (t == "IN" || t == "OUT") query = query.Where(x => x.TransactionType == t);
-            }
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.TransactionType != null && x.TransactionType.ToLower().Contains(term)) ||
-                    (x.Remarks != null && x.Remarks.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.TransactionDate);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, inventoryItemId, transactionType, searchTerm, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

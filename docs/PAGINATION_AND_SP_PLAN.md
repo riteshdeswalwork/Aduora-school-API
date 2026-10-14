@@ -54,8 +54,8 @@ and the controller action reduced to a one-line call - response shape unchanged.
 | Co-Curricular Activities/Participation | ✅ `sp_CoCurricularActivities_GetPaged` (totalCount=2), `sp_CoCurricularParticipations_GetPaged` (shape, 0 rows) |
 | Scholarship/Applications | ✅ `sp_Scholarships_GetPaged` (totalCount=2), `sp_ScholarshipApplications_GetPaged` (totalCount=1) |
 | Hostel/Hostel Rooms/Allocations | ✅ `sp_Hostels_GetPaged` (1), `sp_HostelRooms_GetPaged` (2), `sp_HostelAllocations_GetPaged` (0, shape) - all verified |
-| Asset/Asset Maintenance | ⬜ |
-| Inventory Items/Transactions | ⬜ |
+| Asset/Asset Maintenance | ✅ `sp_Assets_GetPaged` (2), `sp_AssetMaintenanceRecords_GetPaged` (1) - verified |
+| Inventory Items/Transactions | ✅ `sp_InventoryItems_GetPaged` (2), `sp_InventoryTransactions_GetPaged` (0, shape) - verified |
 | Biometric Devices/Logs/UserMaps | ⬜ |
 | Gallery Media | ⬜ |
 | Invitees | ⬜ |
