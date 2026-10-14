@@ -40,6 +40,7 @@ namespace sms.api.Interfaces.Library
         Task<IEnumerable<BookDTO>> GetAvailableBooksAsync();
         Task<IEnumerable<BookDTO>> GetPopularBooksAsync(int count = 10);
         Task<IEnumerable<LibraryMemberDTO>> GetAllLibraryMembersAsync();
+        Task<PagedResult<LibraryMemberDTO>> GetLibraryMembersPagedAsync(int pageNumber, int pageSize, string? searchTerm = null, string? memberType = null, bool includeInactive = false);
         Task<LibraryMemberDTO?> GetLibraryMemberByIdAsync(Guid id);
         Task<LibraryMemberDTO?> GetLibraryMemberByUserIdAsync(Guid userId);
         Task<LibraryMemberDTO?> GetLibraryMemberByMembershipNumberAsync(string membershipNumber);
