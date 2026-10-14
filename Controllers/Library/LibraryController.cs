@@ -99,6 +99,20 @@ namespace sms.api.Controllers.Library
             }
         }
 
+        [HttpGet("members/paged")]
+        public async Task<IActionResult> GetMembersPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? memberType = null, [FromQuery] bool includeInactive = false)
+        {
+            try
+            {
+                var result = await _libraryManager.GetLibraryMembersPagedAsync(pageNumber, pageSize, searchTerm, memberType, includeInactive);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error retrieving library members", error = ex.Message });
+            }
+        }
+
         [HttpGet("members/{id}")]
         public async Task<IActionResult> GetMemberById(Guid id)
         {

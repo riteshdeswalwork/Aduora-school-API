@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
@@ -753,6 +754,66 @@ namespace sms.api.Managers.Library
                 .OrderBy(m => m.MembershipNumber)
                 .ToListAsync();
             return members.Select(MapLibraryMemberToDTO);
+        }
+
+        // Page row shape for dbo.sp_LibraryMembers_GetPaged result set 2: every
+        // LibraryMember scalar column (mapped by Dapper onto the inherited
+        // properties) plus the joined user's first/last name.
+        private sealed class LibraryMemberPagedRow : LibraryMember
+        {
+            public string? User_FirstName { get; set; }
+            public string? User_LastName { get; set; }
+        }
+
+        public async Task<PagedResult<LibraryMemberDTO>> GetLibraryMembersPagedAsync(int pageNumber, int pageSize, string? searchTerm = null, string? memberType = null, bool includeInactive = false)
+        {
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 20;
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", pageSize);
+            parameters.Add("@SearchTerm", string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim());
+            parameters.Add("@MemberType", string.IsNullOrWhiteSpace(memberType) ? null : memberType.Trim());
+            parameters.Add("@IncludeInactive", includeInactive);
+            // Same scoping EF's global query filter applies to the original route.
+            parameters.Add("@AcademicYearId", _context.CurrentAcademicYearId);
+
+            using var connection = await _sqlDataAccess.CreateOpenConnectionAsync();
+            using var multi = await connection.QueryMultipleAsync(
+                "dbo.sp_LibraryMembers_GetPaged", parameters, commandType: CommandType.StoredProcedure);
+            var (totalCount, items) = await ReadLibraryMembersPageAsync(multi);
+
+            var totalPages = pageSize > 0 ? (int)Math.Ceiling(totalCount / (double)pageSize) : 0;
+            return new PagedResult<LibraryMemberDTO>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            };
+        }
+
+        // Reads sp_LibraryMembers_GetPaged's 3 result sets in order (count, page,
+        // book issues for the page), rebuilds each LibraryMember with its User and
+        // a BookIssues collection carrying just IsActive/IsReturned/DueDate, and
+        // runs it through the existing MapLibraryMemberToDTO so the entity's own
+        // computed properties (HasOverdueBooks, CanIssueBooks, ...) apply unchanged.
+        private static async Task<(int TotalCount, List<LibraryMemberDTO> Items)> ReadLibraryMembersPageAsync(SqlMapper.GridReader multi)
+        {
+            var totalCount = await multi.ReadSingleAsync<int>();
+            var memberRows = (await multi.ReadAsync<LibraryMemberPagedRow>()).ToList();
+            var issuesByMember = (await multi.ReadAsync<BookIssue>()).ToLookup(bi => bi.LibraryMemberId);
+
+            var items = memberRows.Select(row =>
+            {
+                row.User = new User { Id = row.UserId, FirstName = row.User_FirstName ?? string.Empty, LastName = row.User_LastName ?? string.Empty };
+                row.BookIssues = issuesByMember[row.Id].ToList();
+                return MapLibraryMemberToDTO(row);
+            }).ToList();
+
+            return (totalCount, items);
         }
 
         public async Task<LibraryMemberDTO?> GetLibraryMemberByIdAsync(Guid id)
