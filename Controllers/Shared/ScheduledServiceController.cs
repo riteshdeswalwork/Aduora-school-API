@@ -40,22 +40,8 @@ namespace sms.api.Controllers.Shared
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] string? category = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.ScheduledServices.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (!string.IsNullOrWhiteSpace(status)) query = query.Where(x => x.Status != null && x.Status.Trim().ToLower() == status.Trim().ToLower());
-            if (!string.IsNullOrWhiteSpace(category)) query = query.Where(x => x.Category != null && x.Category.ToLower().Contains(category.Trim().ToLower()));
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.Title != null && x.Title.ToLower().Contains(term)) ||
-                    (x.Category != null && x.Category.ToLower().Contains(term)) ||
-                    (x.Notes != null && x.Notes.ToLower().Contains(term)) ||
-                    (x.Frequency != null && x.Frequency.ToLower().Contains(term)) ||
-                    (x.Status != null && x.Status.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.ScheduledFor);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, searchTerm, status, category, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

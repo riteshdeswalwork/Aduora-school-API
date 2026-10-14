@@ -57,10 +57,10 @@ and the controller action reduced to a one-line call - response shape unchanged.
 | Asset/Asset Maintenance | ✅ `sp_Assets_GetPaged` (2), `sp_AssetMaintenanceRecords_GetPaged` (1) - verified |
 | Inventory Items/Transactions | ✅ `sp_InventoryItems_GetPaged` (2), `sp_InventoryTransactions_GetPaged` (0, shape) - verified |
 | Biometric Devices/Logs/UserMaps | ✅ `sp_BiometricDevices_GetPaged`, `sp_BiometricLogs_GetPaged`, `sp_BiometricUserMaps_GetPaged` - all verified (shape, 0 rows in DB currently) |
-| Gallery Media | ⬜ |
-| Invitees | ⬜ |
-| Lecture Topics | ⬜ |
-| Scheduled Services | ⬜ |
+| Gallery Media | ✅ `sp_GalleryMedia_GetPaged` (totalCount=2) |
+| Invitees | ✅ `sp_Invitees_GetPaged` (totalCount=2) |
+| Lecture Topics | ✅ `sp_LectureTopics_GetPaged` (totalCount=5) |
+| Scheduled Services | ✅ `sp_ScheduledServices_GetPaged` (totalCount=2) |
 | Bus | ⬜ |
 | Transfer Certificates | ⬜ |
 | OnlinePaymentTransaction | ⬜ |

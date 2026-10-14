@@ -54,35 +54,10 @@ namespace sms.api.Controllers.Shared
             if (!yearId.HasValue) return BadRequest(new { message = "Academic year not selected" });
 
             var scope = await GetDataScopeAsync();
-            var query = _context.LectureTopics.AsNoTracking().Where(x => x.AcademicYearId == yearId.Value);
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-
             var allowedClassIds = DataScopeHelper.AllowedClassIdsForQuery(scope);
-            if (allowedClassIds != null)
-            {
-                var allowed = allowedClassIds.ToList();
-                query = query.Where(x => x.ClassId.HasValue && allowed.Contains(x.ClassId.Value));
-            }
 
-            if (!string.IsNullOrWhiteSpace(tab))
-            {
-                if (string.Equals(tab, "Planned", StringComparison.OrdinalIgnoreCase))
-                    query = query.Where(x => x.Status == "Planned" || x.Status == "Postponed");
-                else if (string.Equals(tab, "Covered", StringComparison.OrdinalIgnoreCase))
-                    query = query.Where(x => x.Status == "Covered");
-            }
-            if (!string.IsNullOrWhiteSpace(status))
-                query = query.Where(x => x.Status != null && x.Status.ToLower() == status.Trim().ToLower());
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.Topic != null && x.Topic.ToLower().Contains(term)) ||
-                    (x.Details != null && x.Details.ToLower().Contains(term)) ||
-                    (x.ChapterOrUnit != null && x.ChapterOrUnit.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.LectureDate);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(yearId.Value, pageNumber, pageSize, searchTerm, status, tab, includeInactive, allowedClassIds);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

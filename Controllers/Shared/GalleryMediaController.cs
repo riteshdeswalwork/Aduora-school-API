@@ -41,23 +41,8 @@ namespace sms.api.Controllers.Shared
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? mediaType = null, [FromQuery] string? albumCategory = null, [FromQuery] bool? isPublic = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.GalleryMedia.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (!string.IsNullOrWhiteSpace(mediaType)) query = query.Where(x => x.MediaType != null && x.MediaType.ToLower() == mediaType.Trim().ToLower());
-            if (!string.IsNullOrWhiteSpace(albumCategory)) query = query.Where(x => x.AlbumCategory != null && x.AlbumCategory.ToLower().Contains(albumCategory.Trim().ToLower()));
-            if (isPublic.HasValue) query = query.Where(x => x.IsPublic == isPublic.Value);
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.Title != null && x.Title.ToLower().Contains(term)) ||
-                    (x.Url != null && x.Url.ToLower().Contains(term)) ||
-                    (x.AlbumCategory != null && x.AlbumCategory.ToLower().Contains(term)) ||
-                    (x.MediaType != null && x.MediaType.ToLower().Contains(term)) ||
-                    (x.PhotographerMetadata != null && x.PhotographerMetadata.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.CreatedAt);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, searchTerm, mediaType, albumCategory, isPublic, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

@@ -42,23 +42,8 @@ namespace sms.api.Controllers.Shared
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? eventId = null, [FromQuery] string? searchTerm = null, [FromQuery] string? rsvpStatus = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.Invitees.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (eventId.HasValue) query = query.Where(x => x.EventId == eventId.Value);
-            if (!string.IsNullOrWhiteSpace(rsvpStatus))
-                query = query.Where(x => x.RsvpStatus != null && x.RsvpStatus.ToLower() == rsvpStatus.Trim().ToLower());
-            if (!string.IsNullOrWhiteSpace(searchTerm))
-            {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.Name != null && x.Name.ToLower().Contains(term)) ||
-                    (x.Email != null && x.Email.ToLower().Contains(term)) ||
-                    (x.ContactNumber != null && x.ContactNumber.ToLower().Contains(term)) ||
-                    (x.Role != null && x.Role.ToLower().Contains(term)) ||
-                    (x.RsvpStatus != null && x.RsvpStatus.ToLower().Contains(term)));
-            }
-            query = query.OrderByDescending(x => x.CreatedAt);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, eventId, searchTerm, rsvpStatus, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]
