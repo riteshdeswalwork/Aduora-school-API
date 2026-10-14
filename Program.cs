@@ -129,6 +129,7 @@ builder.Services.AddScoped<IAnalyticsManager, AnalyticsManager>();
 builder.Services.AddScoped<IDesignationManager, DesignationManager>();
 builder.Services.AddScoped<IStudentLeaveManager, StudentLeaveManager>();
 builder.Services.AddScoped<IStaffLeaveManager, StaffLeaveManager>();
+builder.Services.AddScoped<ICombinedLeaveManager, CombinedLeaveManager>();
 builder.Services.AddScoped<IClassAttendanceManager, ClassAttendanceManager>();
 builder.Services.AddScoped<IFeeStructureManager, FeeStructureManager>();
 builder.Services.AddScoped<IStudentFeeManager, StudentFeeManager>();

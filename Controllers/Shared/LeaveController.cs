@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using sms.api.Interfaces;
+using sms.api.Interfaces.Shared;
 using sms.api.Models;
 using System.Security.Claims;
 
@@ -15,17 +16,20 @@ namespace sms.api.Controllers.Shared
         private readonly IStaffLeaveManager _staffLeaveManager;
         private readonly IStudentManager _studentManager;
         private readonly IStaffManager _staffManager;
+        private readonly ICombinedLeaveManager _combinedLeaveManager;
 
         public LeaveController(
             IStudentLeaveManager studentLeaveManager,
             IStaffLeaveManager staffLeaveManager,
             IStudentManager studentManager,
-            IStaffManager staffManager)
+            IStaffManager staffManager,
+            ICombinedLeaveManager combinedLeaveManager)
         {
             _studentLeaveManager = studentLeaveManager;
             _staffLeaveManager = staffLeaveManager;
             _studentManager = studentManager;
             _staffManager = staffManager;
+            _combinedLeaveManager = combinedLeaveManager;
         }
 
         /// <summary>GET api/leaves/my - current user's leaves (student or staff).</summary>
@@ -94,6 +98,18 @@ namespace sms.api.Controllers.Shared
             {
                 return StatusCode(500, new { error = $"An error occurred: {ex.Message}" });
             }
+        }
+
+        /// <summary>
+        /// GET api/leaves/paged - paged, SP-backed (dbo.sp_Leaves_GetAllPaged) version of GetAll:
+        /// student + staff leaves combined, CreatedAt DESC, same per-item shape. Optional status filter.
+        /// </summary>
+        [HttpGet("paged")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> GetAllPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? status = null)
+        {
+            var result = await _combinedLeaveManager.GetAllLeavesPagedAsync(pageNumber, pageSize, status);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]
