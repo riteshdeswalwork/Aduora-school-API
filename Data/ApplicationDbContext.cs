@@ -846,13 +846,13 @@ namespace sms.api.Data
 
             modelBuilder.Entity<BookIssue>()
                 .HasOne(bi => bi.LibraryMember)
-                .WithMany()
+                .WithMany(lm => lm.BookIssues)
                 .HasForeignKey(bi => bi.LibraryMemberId)
                 .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<BookIssue>()
                 .HasOne(bi => bi.Book)
-                .WithMany()
+                .WithMany(b => b.BookIssues)
                 .HasForeignKey(bi => bi.BookId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -870,13 +870,13 @@ namespace sms.api.Data
 
             modelBuilder.Entity<BookReservation>()
                 .HasOne(br => br.LibraryMember)
-                .WithMany()
+                .WithMany(lm => lm.BookReservations)
                 .HasForeignKey(br => br.LibraryMemberId)
                 .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<BookReservation>()
                 .HasOne(br => br.Book)
-                .WithMany()
+                .WithMany(b => b.BookReservations)
                 .HasForeignKey(br => br.BookId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -888,13 +888,13 @@ namespace sms.api.Data
 
             modelBuilder.Entity<LibraryFine>()
                 .HasOne(lf => lf.LibraryMember)
-                .WithMany()
+                .WithMany(lm => lm.LibraryFines)
                 .HasForeignKey(lf => lf.LibraryMemberId)
                 .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<LibraryFine>()
                 .HasOne(lf => lf.BookIssue)
-                .WithMany()
+                .WithMany(bi => bi.LibraryFines)
                 .HasForeignKey(lf => lf.BookIssueId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -912,7 +912,7 @@ namespace sms.api.Data
 
             modelBuilder.Entity<BookReview>()
                 .HasOne(br => br.Book)
-                .WithMany()
+                .WithMany(b => b.BookReviews)
                 .HasForeignKey(br => br.BookId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -938,7 +938,7 @@ namespace sms.api.Data
             // Configure Book relationships to prevent cascade conflicts
             modelBuilder.Entity<Book>()
                 .HasOne(b => b.Publisher)
-                .WithMany()
+                .WithMany(p => p.Books)
                 .HasForeignKey(b => b.PublisherId)
                 .OnDelete(DeleteBehavior.NoAction); // Prevent cascade conflicts
 

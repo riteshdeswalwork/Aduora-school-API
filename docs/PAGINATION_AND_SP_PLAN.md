@@ -81,7 +81,20 @@ and the controller action reduced to a one-line call - response shape unchanged.
 
 **Tier 3 status: ✅ all 5 done and verified (2026-10-14)** - Notifications inbox, Leaves (combined), Library Book Issues, Library Fines, Library Members, Library Book Reservations. Chat message history remains explicitly skipped (already bounded, see above).
 
-**EF mapping bug found during this migration (not fixed, tracked for a decision):** `BookIssue`↔`LibraryMember` is missing `.WithMany(lm => lm.BookIssues)` on the relationship, so EF generated an unused shadow FK column `BookIssues.LibraryMemberId1` instead of using the real `LibraryMemberId` for that navigation. The app has never populated `LibraryMemberId1`, so `LibraryMember.BookIssues` has always been empty in production and `LibraryMember.HasOverdueBooks` on the existing (old) `/members` route always reports `false` regardless of actual overdue books. The new `/members/paged` route joins on the real FK and reports this correctly, so the two routes now intentionally disagree on this one computed field until the mapping is fixed. The same shadow-FK pattern exists on `BookReservations` and `LibraryFines`. Left as-is pending a decision: fix the EF mapping (would also silently change old-route behavior) or keep tracked as a known discrepancy.
+**EF mapping bug found during this migration - FIXED (2026-10-14).** Several Library/Book relationships used `.WithMany()` with no inverse selector even though the "many" side already declared a real `ICollection<T>` nav property, which made EF Core treat the real collection as a *second*, unconfigured relationship and silently add an unused shadow FK column for it (confirmed via `INFORMATION_SCHEMA.COLUMNS`, all `%Id1` columns, all 0 rows in every affected table so no data at risk):
+
+| Relationship | Shadow column removed |
+|---|---|
+| `BookIssue.LibraryMember` / `LibraryMember.BookIssues` | `BookIssues.LibraryMemberId1` |
+| `BookIssue.Book` / `Book.BookIssues` | `BookIssues.BookId1` |
+| `BookReservation.LibraryMember` / `LibraryMember.BookReservations` | `BookReservations.LibraryMemberId1` |
+| `BookReservation.Book` / `Book.BookReservations` | `BookReservations.BookId1` |
+| `LibraryFine.LibraryMember` / `LibraryMember.LibraryFines` | `LibraryFines.LibraryMemberId1` |
+| `LibraryFine.BookIssue` / `BookIssue.LibraryFines` | `LibraryFines.BookIssueId1` |
+| `BookReview.Book` / `Book.BookReviews` | `BookReviews.BookId1` |
+| `Book.Publisher` / `Publisher.Books` | `Books.PublisherId1` |
+
+Fix: each fluent config in `ApplicationDbContext.OnModelCreating` now passes the real inverse nav to `.WithMany(...)` (e.g. `.WithMany(lm => lm.BookIssues)`), so EF binds to the existing collection instead of inventing a second one. Migration `20261014175308_FixLibraryShadowForeignKeys` drops all 8 shadow FK constraints/indexes/columns; applied via the app's normal `Database.Migrate()` startup path and verified live: all 8 columns confirmed gone from `INFORMATION_SCHEMA.COLUMNS`, and all 10 library/leaves routes (5 new paged + 5 old) plus `/library/books` and `/library/publishers` re-tested at 200 afterward. `LibraryMember.HasOverdueBooks` (old `/members` route) and the new `/members/paged` route now agree, since both read the same real FK.
 
 ## Tier 4 - Small/bounded lists - explicitly NOT being paginated
 
