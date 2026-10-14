@@ -38,17 +38,8 @@ namespace sms.api.Controllers.Shared
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? deviceId = null, [FromQuery] Guid? userId = null, [FromQuery] Guid? studentId = null, [FromQuery] Guid? staffId = null, [FromQuery] string? logType = null, [FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.BiometricLogs.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (deviceId.HasValue) query = query.Where(x => x.DeviceId == deviceId.Value);
-            if (userId.HasValue) query = query.Where(x => x.UserId == userId.Value);
-            if (studentId.HasValue) query = query.Where(x => x.StudentId == studentId.Value);
-            if (staffId.HasValue) query = query.Where(x => x.StaffId == staffId.Value);
-            if (!string.IsNullOrWhiteSpace(logType)) query = query.Where(x => x.LogType == logType);
-            if (from.HasValue) query = query.Where(x => x.LoggedAt >= from.Value);
-            if (to.HasValue) query = query.Where(x => x.LoggedAt <= to.Value);
-            query = query.OrderByDescending(x => x.LoggedAt);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+            var result = await _manager.GetPagedAsync(pageNumber, pageSize, deviceId, userId, studentId, staffId, logType, from, to, includeInactive);
+            return Ok(result);
         }
 
         [HttpGet("{id}")]

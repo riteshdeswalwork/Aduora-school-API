@@ -56,7 +56,7 @@ and the controller action reduced to a one-line call - response shape unchanged.
 | Hostel/Hostel Rooms/Allocations | ✅ `sp_Hostels_GetPaged` (1), `sp_HostelRooms_GetPaged` (2), `sp_HostelAllocations_GetPaged` (0, shape) - all verified |
 | Asset/Asset Maintenance | ✅ `sp_Assets_GetPaged` (2), `sp_AssetMaintenanceRecords_GetPaged` (1) - verified |
 | Inventory Items/Transactions | ✅ `sp_InventoryItems_GetPaged` (2), `sp_InventoryTransactions_GetPaged` (0, shape) - verified |
-| Biometric Devices/Logs/UserMaps | ⬜ |
+| Biometric Devices/Logs/UserMaps | ✅ `sp_BiometricDevices_GetPaged`, `sp_BiometricLogs_GetPaged`, `sp_BiometricUserMaps_GetPaged` - all verified (shape, 0 rows in DB currently) |
 | Gallery Media | ⬜ |
 | Invitees | ⬜ |
 | Lecture Topics | ⬜ |

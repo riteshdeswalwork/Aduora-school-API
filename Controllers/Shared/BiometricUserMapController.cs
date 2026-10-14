@@ -1,7 +1,10 @@
+using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
+using sms.api.DTOs;
 using sms.api.Models;
+using sms.api.Services.Data;
 using sms.api.Utils;
 
 namespace sms.api.Controllers.Shared
@@ -10,10 +13,12 @@ namespace sms.api.Controllers.Shared
     public class BiometricUserMapController : ExtraModulesControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ISqlDataAccess _sqlDataAccess;
 
-        public BiometricUserMapController(ApplicationDbContext context)
+        public BiometricUserMapController(ApplicationDbContext context, ISqlDataAccess sqlDataAccess)
         {
             _context = context;
+            _sqlDataAccess = sqlDataAccess;
         }
 
         [HttpGet]
@@ -30,18 +35,28 @@ namespace sms.api.Controllers.Shared
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? deviceId = null, [FromQuery] string? searchTerm = null, [FromQuery] bool includeInactive = false)
         {
-            var query = _context.BiometricUserMaps.AsNoTracking().AsQueryable();
-            if (!includeInactive) query = query.Where(x => x.IsActive);
-            if (deviceId.HasValue) query = query.Where(x => x.DeviceId == deviceId.Value);
-            if (!string.IsNullOrWhiteSpace(searchTerm))
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1) pageSize = 20;
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@PageNumber", pageNumber);
+            parameters.Add("@PageSize", pageSize);
+            parameters.Add("@DeviceId", deviceId);
+            parameters.Add("@SearchTerm", string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm.Trim());
+            parameters.Add("@IncludeInactive", includeInactive);
+
+            var (items, totalCount) = await _sqlDataAccess.QueryPagedStoredProcAsync<BiometricUserMap>(
+                "dbo.sp_BiometricUserMaps_GetPaged", parameters);
+
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+            return Ok(new PagedResult<BiometricUserMap>
             {
-                var term = searchTerm.Trim().ToLower();
-                query = query.Where(x =>
-                    (x.ExternalUserId != null && x.ExternalUserId.ToLower().Contains(term)) ||
-                    (x.DisplayName != null && x.DisplayName.ToLower().Contains(term)));
-            }
-            query = query.OrderBy(x => x.ExternalUserId);
-            return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
+                Items = items,
+                TotalCount = totalCount,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            });
         }
 
         [HttpGet("{id}")]
