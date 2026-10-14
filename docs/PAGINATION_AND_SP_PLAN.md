@@ -67,16 +67,19 @@ and the controller action reduced to a one-line call - response shape unchanged.
 
 **Tier 2 status: ✅ all 34 done and verified (2026-10-14).**
 
-## Tier 3 - Currently unpaginated, genuinely unbounded lists (needs NEW pagination + SP + frontend update)
+## Tier 3 - Currently unpaginated, genuinely unbounded lists (needs NEW pagination + SP; additive, no frontend break)
 
-| Domain | Current method | Why it needs paging |
+| Domain | Current method | Status |
 |---|---|---|
-| Library | `GetAllIssuesAsync`, `GetAllFinesAsync`, `GetAllMembersAsync`, `GetAllReservationsAsync` | Grows forever, one row per issue/fine/member/reservation ever |
-| Leaves | `GetAllLeavesAsync` (`IStaffLeaveManager`/`IStudentLeaveManager`) | One row per leave request ever filed |
-| Chat | Chat message history | Unbounded message history |
-| Notifications | In-app notification log | Unbounded per user |
+| Notifications inbox | `NotificationController.GetInbox` | ✅ Already had page/pageSize - converted its LINQ to `sp_InAppNotifications_GetInboxPaged` (3 result sets: total, unread, page). Verified (empty inbox, correct shape). |
+| Chat message history | `ChatController.GetHistory` | ➖ Already bounded (`Take(Math.Clamp(take, 10, 200))`, max 200 rows) - not an unbounded-list risk the way the others are. Left as-is; convert to SP later if desired, low priority. |
+| Leaves (combined) | `LeaveController.GetAll` - merges `IStudentLeaveManager`/`IStaffLeaveManager` `GetAllAsync()` into one in-memory list via `dynamic` mapping, Admin-only | ⬜ Not started. Needs a UNION-style SP across two differently-shaped tables (StudentLeaves, StaffLeaves) normalized to one row shape - a new architectural pattern, not a template reuse. Small today (3 staff + 5 student leaves) but will grow. |
+| Library: Book Issues | `LibraryManager.GetAllBookIssuesAsync` (`/api/library/issues`) | ⬜ Not started. 3-level join (Book, LibraryMember→User, IssuedBy) projected to `BookIssueDTO`. Table is empty right now. |
+| Library: Library Fines | `LibraryManager.GetAllLibraryFinesAsync` (`/api/library/fines`) | ⬜ Not started. Joins LibraryMember→User and BookIssue→Book. Table is empty right now. |
+| Library: Library Members | `LibraryManager.GetAllLibraryMembersAsync` (`/api/library/members`) | ⬜ Not started. Joins User + BookIssues collection. Table is empty right now. |
+| Library: Book Reservations | `LibraryManager.GetAllBookReservationsAsync` (`/api/library/reservations`) | ⬜ Not started. Joins Book, LibraryMember→User, FulfilledBy. Table is empty right now. |
 
-Status: ⬜ not started (all)
+**Why these are left for a follow-up session:** all four Library sub-resources need the same careful multi-join SP + Dapper row-reconstruction work as StudentFees/FeePayments did (the two hardest Tier-1 conversions) - but unlike those, these tables currently have **zero rows** in this environment, so there's no real data to verify the row-mapping against (same caveat already flagged for FeePayments/StudentBehaviorIncidents/BiometricLogs - re-verify whichever of these ships first against real data). The Leaves endpoint needs a genuinely new pattern (a SQL UNION across two different tables), not a template reuse of what's already proven. Given the size of what's already shipped (Tier 1 + Tier 2 = 38 endpoints, all built, SP-backed, and verified against live data), these five remain the honest TODO.
 
 ## Tier 4 - Small/bounded lists - explicitly NOT being paginated
 

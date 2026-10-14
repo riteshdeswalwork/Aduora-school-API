@@ -1,9 +1,11 @@
+using Dapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.Models;
 using sms.api.Services;
+using sms.api.Services.Data;
 using System.Security.Claims;
 
 namespace sms.api.Controllers
@@ -18,17 +20,20 @@ namespace sms.api.Controllers
         private readonly INotificationOrchestrator _orchestrator;
         private readonly ApplicationDbContext _context;
         private readonly ILogger<NotificationController> _logger;
+        private readonly ISqlDataAccess _sqlDataAccess;
 
         public NotificationController(
             IFirebaseNotificationService firebaseService,
             INotificationOrchestrator orchestrator,
             ApplicationDbContext context,
-            ILogger<NotificationController> logger)
+            ILogger<NotificationController> logger,
+            ISqlDataAccess sqlDataAccess)
         {
             _firebaseService = firebaseService;
             _orchestrator = orchestrator;
             _context = context;
             _logger = logger;
+            _sqlDataAccess = sqlDataAccess;
         }
 
         private bool TryGetUserId(out Guid userId)
@@ -108,31 +113,19 @@ namespace sms.api.Controllers
             page = Math.Max(1, page);
             pageSize = Math.Clamp(pageSize, 1, 100);
 
-            var q = _context.InAppNotifications.AsNoTracking().Where(n => n.UserId == userId);
-            if (unreadOnly) q = q.Where(n => !n.IsRead);
+            var parameters = new DynamicParameters();
+            parameters.Add("@UserId", userId);
+            parameters.Add("@UnreadOnly", unreadOnly);
+            parameters.Add("@Page", page);
+            parameters.Add("@PageSize", pageSize);
 
-            var total = await q.CountAsync();
-            var unread = await _context.InAppNotifications.AsNoTracking()
-                .CountAsync(n => n.UserId == userId && !n.IsRead);
+            using var connection = await _sqlDataAccess.CreateOpenConnectionAsync();
+            using var multi = await connection.QueryMultipleAsync(
+                "dbo.sp_InAppNotifications_GetInboxPaged", parameters, commandType: System.Data.CommandType.StoredProcedure);
 
-            var items = await q
-                .OrderByDescending(n => n.CreatedAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(n => new
-                {
-                    n.Id,
-                    n.Title,
-                    n.Body,
-                    n.Type,
-                    n.EntityType,
-                    n.EntityId,
-                    n.Severity,
-                    n.IsRead,
-                    n.CreatedAt,
-                    n.DataJson
-                })
-                .ToListAsync();
+            var total = await multi.ReadSingleAsync<int>();
+            var unread = await multi.ReadSingleAsync<int>();
+            var items = (await multi.ReadAsync<InboxNotificationDto>()).ToList();
 
             return Ok(new { items, total, unread, page, pageSize });
         }
@@ -405,5 +398,21 @@ namespace sms.api.Controllers
         public string? EmailHtmlBody { get; set; }
         public SendChannelsDto? Channels { get; set; }
         public Dictionary<string, string>? Data { get; set; }
+    }
+
+    /// <summary>Flat row shape returned by dbo.sp_InAppNotifications_GetInboxPaged -
+    /// mirrors the inbox's original anonymous-object projection field-for-field.</summary>
+    public class InboxNotificationDto
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Body { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public string? EntityType { get; set; }
+        public Guid? EntityId { get; set; }
+        public string Severity { get; set; } = string.Empty;
+        public bool IsRead { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public string? DataJson { get; set; }
     }
 }
