@@ -137,18 +137,26 @@ namespace sms.api.Managers.Admin
             }
             await _context.SaveChangesAsync();
 
-            await NotificationEvents.NotifyUsersAsync(
-                _notify,
-                Enumerable.Empty<Guid>(),
-                "Role permissions updated",
-                $"Permissions were updated for role \"{role.Name}\" ({permissionIds.Count} permission(s)).",
-                "role.permissions.changed",
-                "system",
-                NotificationChannels.InApp | NotificationChannels.Push | NotificationChannels.Email,
-                roleId,
-                "Role",
-                includeAdmins: true,
-                idempotencyKey: $"role.permissions.changed:{roleId}:{DateTime.UtcNow:yyyyMMddHHmm}");
+            try
+            {
+                await NotificationEvents.NotifyUsersAsync(
+                    _notify,
+                    Enumerable.Empty<Guid>(),
+                    "Role permissions updated",
+                    $"Permissions were updated for role \"{role.Name}\" ({permissionIds.Count} permission(s)).",
+                    "role.permissions.changed",
+                    "system",
+                    NotificationChannels.InApp | NotificationChannels.Push | NotificationChannels.Email,
+                    roleId,
+                    "Role",
+                    includeAdmins: true,
+                    idempotencyKey: $"role.permissions.changed:{roleId}:{DateTime.UtcNow:yyyyMMddHHmm}");
+            }
+            catch
+            {
+                // Permissions were already saved above; a failure to notify admins about the
+                // change must not be reported back as a failure to assign the permissions.
+            }
 
             return true;
         }
