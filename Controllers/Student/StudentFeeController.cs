@@ -28,7 +28,9 @@ namespace sms.api.Controllers.Student
 
         private static bool FeeInAllowedClasses(StudentFee fee, IReadOnlyCollection<Guid> allowed)
         {
-            return fee.FeeStructure != null && allowed.Contains(fee.FeeStructure.ClassId);
+            if (fee.FeeStructure == null) return false;
+            if (fee.FeeStructure.ClassId == null) return true; // common fee, applies to every class
+            return allowed.Contains(fee.FeeStructure.ClassId.Value);
         }
 
         [HttpGet]

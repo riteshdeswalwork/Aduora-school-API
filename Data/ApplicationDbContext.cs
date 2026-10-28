@@ -205,14 +205,6 @@ namespace sms.api.Data
                 .HasForeignKey<Student>(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Configure Staff-Designation relationship
-            modelBuilder.Entity<Staff>()
-                .HasOne(s => s.Designation)
-                .WithMany()
-                .HasForeignKey(s => s.DesignationId)
-                .IsRequired(false)
-                .OnDelete(DeleteBehavior.SetNull);
-
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Admin)
                 .WithOne(a => a.User)
@@ -846,13 +838,13 @@ namespace sms.api.Data
 
             modelBuilder.Entity<BookIssue>()
                 .HasOne(bi => bi.LibraryMember)
-                .WithMany()
+                .WithMany(lm => lm.BookIssues)
                 .HasForeignKey(bi => bi.LibraryMemberId)
                 .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<BookIssue>()
                 .HasOne(bi => bi.Book)
-                .WithMany()
+                .WithMany(b => b.BookIssues)
                 .HasForeignKey(bi => bi.BookId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -870,13 +862,13 @@ namespace sms.api.Data
 
             modelBuilder.Entity<BookReservation>()
                 .HasOne(br => br.LibraryMember)
-                .WithMany()
+                .WithMany(lm => lm.BookReservations)
                 .HasForeignKey(br => br.LibraryMemberId)
                 .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<BookReservation>()
                 .HasOne(br => br.Book)
-                .WithMany()
+                .WithMany(b => b.BookReservations)
                 .HasForeignKey(br => br.BookId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -888,13 +880,13 @@ namespace sms.api.Data
 
             modelBuilder.Entity<LibraryFine>()
                 .HasOne(lf => lf.LibraryMember)
-                .WithMany()
+                .WithMany(lm => lm.LibraryFines)
                 .HasForeignKey(lf => lf.LibraryMemberId)
                 .OnDelete(DeleteBehavior.NoAction);
 
             modelBuilder.Entity<LibraryFine>()
                 .HasOne(lf => lf.BookIssue)
-                .WithMany()
+                .WithMany(bi => bi.LibraryFines)
                 .HasForeignKey(lf => lf.BookIssueId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -912,7 +904,7 @@ namespace sms.api.Data
 
             modelBuilder.Entity<BookReview>()
                 .HasOne(br => br.Book)
-                .WithMany()
+                .WithMany(b => b.BookReviews)
                 .HasForeignKey(br => br.BookId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -938,13 +930,13 @@ namespace sms.api.Data
             // Configure Book relationships to prevent cascade conflicts
             modelBuilder.Entity<Book>()
                 .HasOne(b => b.Publisher)
-                .WithMany()
+                .WithMany(p => p.Books)
                 .HasForeignKey(b => b.PublisherId)
                 .OnDelete(DeleteBehavior.NoAction); // Prevent cascade conflicts
 
             modelBuilder.Entity<Book>()
                 .HasOne(b => b.Category)
-                .WithMany()
+                .WithMany(c => c.Books)
                 .HasForeignKey(b => b.CategoryId)
                 .OnDelete(DeleteBehavior.NoAction); // Prevent cascade conflicts
 
@@ -1001,7 +993,7 @@ namespace sms.api.Data
 
             modelBuilder.Entity<ClassPromotionHistory>()
                 .HasOne(cph => cph.AcademicYear)
-                .WithMany()
+                .WithMany(ay => ay.ClassPromotionHistories)
                 .HasForeignKey(cph => cph.AcademicYearId)
                 .OnDelete(DeleteBehavior.NoAction); // Prevent cascade conflicts
 
@@ -1032,7 +1024,7 @@ namespace sms.api.Data
 
             modelBuilder.Entity<StudentAcademicHistory>()
                 .HasOne(sah => sah.AcademicYear)
-                .WithMany()
+                .WithMany(ay => ay.StudentAcademicHistories)
                 .HasForeignKey(sah => sah.AcademicYearId)
                 .OnDelete(DeleteBehavior.NoAction); // Prevent cascade conflicts
 
@@ -1051,7 +1043,7 @@ namespace sms.api.Data
 
             modelBuilder.Entity<AcademicPerformanceHistory>()
                 .HasOne(aph => aph.AcademicYear)
-                .WithMany()
+                .WithMany(ay => ay.AcademicPerformanceHistories)
                 .HasForeignKey(aph => aph.AcademicYearId)
                 .OnDelete(DeleteBehavior.NoAction); // Prevent cascade conflicts
 
@@ -1076,7 +1068,7 @@ namespace sms.api.Data
 
             modelBuilder.Entity<FeeHistoryByYear>()
                 .HasOne(fhy => fhy.AcademicYear)
-                .WithMany()
+                .WithMany(ay => ay.FeeHistoriesByYear)
                 .HasForeignKey(fhy => fhy.AcademicYearId)
                 .OnDelete(DeleteBehavior.NoAction); // Prevent cascade conflicts
 

@@ -17,7 +17,7 @@ namespace sms.api.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.6")
+                .HasAnnotation("ProductVersion", "8.0.6")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -29,9 +29,6 @@ namespace sms.api.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("AcademicYearId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("AcademicYearId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal?>("AssignmentMarks")
@@ -171,8 +168,6 @@ namespace sms.api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicYearId");
-
-                    b.HasIndex("AcademicYearId1");
 
                     b.HasIndex("ClassId");
 
@@ -722,56 +717,6 @@ namespace sms.api.Migrations
                     b.ToTable("BiometricDevices");
                 });
 
-            modelBuilder.Entity("sms.api.Models.BiometricFingerTemplate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("FingerCode")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("nvarchar(10)");
-
-                    b.Property<int>("FingerIndex")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("IsoTemplate")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PersonType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<int>("Quality")
-                        .HasColumnType("int");
-
-                    b.Property<Guid?>("StaffId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("StudentId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StaffId");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("BiometricFingerTemplates");
-                });
-
             modelBuilder.Entity("sms.api.Models.BiometricFaceTemplate", b =>
                 {
                     b.Property<Guid>("Id")
@@ -823,6 +768,56 @@ namespace sms.api.Migrations
                     b.HasIndex("StudentId");
 
                     b.ToTable("BiometricFaceTemplates");
+                });
+
+            modelBuilder.Entity("sms.api.Models.BiometricFingerTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FingerCode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("FingerIndex")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("IsoTemplate")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PersonType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("Quality")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("StaffId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("StudentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StaffId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("BiometricFingerTemplates");
                 });
 
             modelBuilder.Entity("sms.api.Models.BiometricLog", b =>
@@ -948,9 +943,6 @@ namespace sms.api.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
-                    b.Property<Guid?>("BookCategoryId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("CallNumber")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -1067,9 +1059,6 @@ namespace sms.api.Migrations
                     b.Property<Guid>("PublisherId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("PublisherId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<decimal?>("PurchasePrice")
                         .HasColumnType("decimal(10,2)");
 
@@ -1112,15 +1101,11 @@ namespace sms.api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BookCategoryId");
-
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("PublisherId");
-
-                    b.HasIndex("PublisherId1");
 
                     b.ToTable("Books");
                 });
@@ -1224,9 +1209,6 @@ namespace sms.api.Migrations
                     b.Property<Guid>("BookId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("BookId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -1306,9 +1288,6 @@ namespace sms.api.Migrations
                     b.Property<Guid>("LibraryMemberId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("LibraryMemberId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("LostDamageDescription")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -1368,13 +1347,9 @@ namespace sms.api.Migrations
 
                     b.HasIndex("BookId");
 
-                    b.HasIndex("BookId1");
-
                     b.HasIndex("IssuedByUserId");
 
                     b.HasIndex("LibraryMemberId");
-
-                    b.HasIndex("LibraryMemberId1");
 
                     b.HasIndex("ReturnedByUserId");
 
@@ -1394,9 +1369,6 @@ namespace sms.api.Migrations
                         .HasColumnType("bit");
 
                     b.Property<Guid>("BookId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("BookId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("BookIssueId")
@@ -1453,9 +1425,6 @@ namespace sms.api.Migrations
                     b.Property<Guid>("LibraryMemberId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("LibraryMemberId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<int>("MaxExtensions")
                         .HasColumnType("int");
 
@@ -1509,8 +1478,6 @@ namespace sms.api.Migrations
 
                     b.HasIndex("BookId");
 
-                    b.HasIndex("BookId1");
-
                     b.HasIndex("BookIssueId");
 
                     b.HasIndex("CancelledByUserId");
@@ -1520,8 +1487,6 @@ namespace sms.api.Migrations
                     b.HasIndex("FulfilledByUserId");
 
                     b.HasIndex("LibraryMemberId");
-
-                    b.HasIndex("LibraryMemberId1");
 
                     b.ToTable("BookReservations");
                 });
@@ -1542,9 +1507,6 @@ namespace sms.api.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<Guid>("BookId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("BookId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Cons")
@@ -1660,8 +1622,6 @@ namespace sms.api.Migrations
                     b.HasIndex("ApprovedByUserId");
 
                     b.HasIndex("BookId");
-
-                    b.HasIndex("BookId1");
 
                     b.HasIndex("LibraryMemberId");
 
@@ -2552,9 +2512,6 @@ namespace sms.api.Migrations
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("AcademicYearId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<bool>("AreDocumentsComplete")
                         .HasColumnType("bit");
 
@@ -2674,8 +2631,6 @@ namespace sms.api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicYearId");
-
-                    b.HasIndex("AcademicYearId1");
 
                     b.HasIndex("DecisionMadeByUserId");
 
@@ -3572,9 +3527,6 @@ namespace sms.api.Migrations
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("AcademicYearId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<decimal>("AdmissionFee")
                         .HasColumnType("decimal(10,2)");
 
@@ -3757,8 +3709,6 @@ namespace sms.api.Migrations
 
                     b.HasIndex("AcademicYearId");
 
-                    b.HasIndex("AcademicYearId1");
-
                     b.HasIndex("ClassId");
 
                     b.HasIndex("DiscountApprovedByUserId");
@@ -3920,7 +3870,7 @@ namespace sms.api.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<Guid>("ClassId")
+                    b.Property<Guid?>("ClassId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedAt")
@@ -4634,9 +4584,6 @@ namespace sms.api.Migrations
                     b.Property<Guid?>("BookIssueId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("BookIssueId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<decimal?>("BookReplacementCost")
                         .HasColumnType("decimal(10,2)");
 
@@ -4693,9 +4640,6 @@ namespace sms.api.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<Guid>("LibraryMemberId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("LibraryMemberId1")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal?>("MaxFineAmount")
@@ -4781,13 +4725,9 @@ namespace sms.api.Migrations
 
                     b.HasIndex("BookIssueId");
 
-                    b.HasIndex("BookIssueId1");
-
                     b.HasIndex("CreatedByUserId");
 
                     b.HasIndex("LibraryMemberId");
-
-                    b.HasIndex("LibraryMemberId1");
 
                     b.HasIndex("PaymentReceivedByUserId");
 
@@ -6346,9 +6286,6 @@ namespace sms.api.Migrations
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<Guid?>("AcademicYearId1")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<string>("AchievementsAndAwards")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -6466,8 +6403,6 @@ namespace sms.api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicYearId");
-
-                    b.HasIndex("AcademicYearId1");
 
                     b.HasIndex("ClassId");
 
@@ -7442,14 +7377,10 @@ namespace sms.api.Migrations
             modelBuilder.Entity("sms.api.Models.AcademicPerformanceHistory", b =>
                 {
                     b.HasOne("sms.api.Models.AcademicYear", "AcademicYear")
-                        .WithMany()
+                        .WithMany("AcademicPerformanceHistories")
                         .HasForeignKey("AcademicYearId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.AcademicYear", null)
-                        .WithMany("AcademicPerformanceHistories")
-                        .HasForeignKey("AcademicYearId1");
 
                     b.HasOne("sms.api.Models.Class", "Class")
                         .WithMany()
@@ -7581,7 +7512,7 @@ namespace sms.api.Migrations
                     b.Navigation("CreatedBy");
                 });
 
-            modelBuilder.Entity("sms.api.Models.BiometricFingerTemplate", b =>
+            modelBuilder.Entity("sms.api.Models.BiometricFaceTemplate", b =>
                 {
                     b.HasOne("sms.api.Models.Staff", "Staff")
                         .WithMany()
@@ -7596,7 +7527,7 @@ namespace sms.api.Migrations
                     b.Navigation("Student");
                 });
 
-            modelBuilder.Entity("sms.api.Models.BiometricFaceTemplate", b =>
+            modelBuilder.Entity("sms.api.Models.BiometricFingerTemplate", b =>
                 {
                     b.HasOne("sms.api.Models.Staff", "Staff")
                         .WithMany()
@@ -7634,12 +7565,8 @@ namespace sms.api.Migrations
 
             modelBuilder.Entity("sms.api.Models.Book", b =>
                 {
-                    b.HasOne("sms.api.Models.BookCategory", null)
-                        .WithMany("Books")
-                        .HasForeignKey("BookCategoryId");
-
                     b.HasOne("sms.api.Models.BookCategory", "Category")
-                        .WithMany()
+                        .WithMany("Books")
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
@@ -7651,14 +7578,10 @@ namespace sms.api.Migrations
                         .IsRequired();
 
                     b.HasOne("sms.api.Models.Publisher", "Publisher")
-                        .WithMany()
+                        .WithMany("Books")
                         .HasForeignKey("PublisherId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.Publisher", null)
-                        .WithMany("Books")
-                        .HasForeignKey("PublisherId1");
 
                     b.Navigation("Category");
 
@@ -7706,14 +7629,10 @@ namespace sms.api.Migrations
                         .IsRequired();
 
                     b.HasOne("sms.api.Models.Book", "Book")
-                        .WithMany()
+                        .WithMany("BookIssues")
                         .HasForeignKey("BookId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.Book", null)
-                        .WithMany("BookIssues")
-                        .HasForeignKey("BookId1");
 
                     b.HasOne("sms.api.Models.User", "IssuedBy")
                         .WithMany()
@@ -7722,14 +7641,10 @@ namespace sms.api.Migrations
                         .IsRequired();
 
                     b.HasOne("sms.api.Models.LibraryMember", "LibraryMember")
-                        .WithMany()
+                        .WithMany("BookIssues")
                         .HasForeignKey("LibraryMemberId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.LibraryMember", null)
-                        .WithMany("BookIssues")
-                        .HasForeignKey("LibraryMemberId1");
 
                     b.HasOne("sms.api.Models.User", "ReturnedBy")
                         .WithMany()
@@ -7755,14 +7670,10 @@ namespace sms.api.Migrations
                         .IsRequired();
 
                     b.HasOne("sms.api.Models.Book", "Book")
-                        .WithMany()
+                        .WithMany("BookReservations")
                         .HasForeignKey("BookId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.Book", null)
-                        .WithMany("BookReservations")
-                        .HasForeignKey("BookId1");
 
                     b.HasOne("sms.api.Models.BookIssue", "BookIssue")
                         .WithMany()
@@ -7783,14 +7694,10 @@ namespace sms.api.Migrations
                         .HasForeignKey("FulfilledByUserId");
 
                     b.HasOne("sms.api.Models.LibraryMember", "LibraryMember")
-                        .WithMany()
+                        .WithMany("BookReservations")
                         .HasForeignKey("LibraryMemberId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.LibraryMember", null)
-                        .WithMany("BookReservations")
-                        .HasForeignKey("LibraryMemberId1");
 
                     b.Navigation("AcademicYear");
 
@@ -7820,14 +7727,10 @@ namespace sms.api.Migrations
                         .HasForeignKey("ApprovedByUserId");
 
                     b.HasOne("sms.api.Models.Book", "Book")
-                        .WithMany()
+                        .WithMany("BookReviews")
                         .HasForeignKey("BookId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.Book", null)
-                        .WithMany("BookReviews")
-                        .HasForeignKey("BookId1");
 
                     b.HasOne("sms.api.Models.LibraryMember", "LibraryMember")
                         .WithMany()
@@ -8145,14 +8048,10 @@ namespace sms.api.Migrations
             modelBuilder.Entity("sms.api.Models.ClassPromotionHistory", b =>
                 {
                     b.HasOne("sms.api.Models.AcademicYear", "AcademicYear")
-                        .WithMany()
+                        .WithMany("ClassPromotionHistories")
                         .HasForeignKey("AcademicYearId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.AcademicYear", null)
-                        .WithMany("ClassPromotionHistories")
-                        .HasForeignKey("AcademicYearId1");
 
                     b.HasOne("sms.api.Models.User", "DecisionMadeBy")
                         .WithMany()
@@ -8404,14 +8303,10 @@ namespace sms.api.Migrations
             modelBuilder.Entity("sms.api.Models.FeeHistoryByYear", b =>
                 {
                     b.HasOne("sms.api.Models.AcademicYear", "AcademicYear")
-                        .WithMany()
+                        .WithMany("FeeHistoriesByYear")
                         .HasForeignKey("AcademicYearId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.AcademicYear", null)
-                        .WithMany("FeeHistoriesByYear")
-                        .HasForeignKey("AcademicYearId1");
 
                     b.HasOne("sms.api.Models.Class", "Class")
                         .WithMany()
@@ -8519,8 +8414,7 @@ namespace sms.api.Migrations
                     b.HasOne("sms.api.Models.Class", "Class")
                         .WithMany()
                         .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("AcademicYearNavigation");
 
@@ -8581,13 +8475,9 @@ namespace sms.api.Migrations
                         .HasForeignKey("AppealDecidedByUserId");
 
                     b.HasOne("sms.api.Models.BookIssue", "BookIssue")
-                        .WithMany()
+                        .WithMany("LibraryFines")
                         .HasForeignKey("BookIssueId")
                         .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("sms.api.Models.BookIssue", null)
-                        .WithMany("LibraryFines")
-                        .HasForeignKey("BookIssueId1");
 
                     b.HasOne("sms.api.Models.User", "CreatedBy")
                         .WithMany()
@@ -8596,14 +8486,10 @@ namespace sms.api.Migrations
                         .IsRequired();
 
                     b.HasOne("sms.api.Models.LibraryMember", "LibraryMember")
-                        .WithMany()
+                        .WithMany("LibraryFines")
                         .HasForeignKey("LibraryMemberId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.LibraryMember", null)
-                        .WithMany("LibraryFines")
-                        .HasForeignKey("LibraryMemberId1");
 
                     b.HasOne("sms.api.Models.User", "PaymentReceivedBy")
                         .WithMany()
@@ -8970,14 +8856,10 @@ namespace sms.api.Migrations
             modelBuilder.Entity("sms.api.Models.StudentAcademicHistory", b =>
                 {
                     b.HasOne("sms.api.Models.AcademicYear", "AcademicYear")
-                        .WithMany()
+                        .WithMany("StudentAcademicHistories")
                         .HasForeignKey("AcademicYearId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
-
-                    b.HasOne("sms.api.Models.AcademicYear", null)
-                        .WithMany("StudentAcademicHistories")
-                        .HasForeignKey("AcademicYearId1");
 
                     b.HasOne("sms.api.Models.Class", "Class")
                         .WithMany()

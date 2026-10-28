@@ -42,7 +42,7 @@ namespace sms.api.Managers.Fee
             return await _dbSet
                 .Include(fs => fs.Class)
                 .Include(fs => fs.Lines)
-                .Where(fs => fs.ClassId == classId)
+                .Where(fs => fs.ClassId == classId || fs.ClassId == null)
                 .OrderBy(fs => fs.Name)
                 .ToListAsync();
         }
@@ -82,7 +82,7 @@ namespace sms.api.Managers.Fee
             return await _dbSet
                 .Include(fs => fs.Class)
                 .Include(fs => fs.Lines)
-                .FirstOrDefaultAsync(fs => fs.ClassId == classId && fs.FeeType == feeType && fs.IsActive);
+                .FirstOrDefaultAsync(fs => (fs.ClassId == classId || fs.ClassId == null) && fs.FeeType == feeType && fs.IsActive);
         }
 
         public async Task<FeeStructureLine> AddLineAsync(Guid feeStructureId, FeeStructureLine line)

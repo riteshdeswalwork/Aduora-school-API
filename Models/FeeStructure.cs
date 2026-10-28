@@ -41,9 +41,8 @@ namespace sms.api.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 
-        // Foreign key to Class
-        [Required]
-        public Guid ClassId { get; set; }
+        // Foreign key to Class. Null = common fee, applies to every class.
+        public Guid? ClassId { get; set; }
 
         [ForeignKey("ClassId")]
         public virtual Class? Class { get; set; }

@@ -511,6 +511,30 @@ namespace sms.api.DTOs
         public bool NeedsAttention { get; set; }
     }
 
+    public class CreateLibraryFineDTO
+    {
+        [Required]
+        public Guid LibraryMemberId { get; set; }
+
+        public Guid? BookIssueId { get; set; }
+
+        [Required]
+        [StringLength(50)]
+        public string FineType { get; set; } = string.Empty; // Overdue, Damage, Lost, Late Return, Other
+
+        [Required]
+        [Range(0.01, double.MaxValue)]
+        public decimal Amount { get; set; }
+
+        public DateTime? DueDate { get; set; }
+
+        [StringLength(1000)]
+        public string? Description { get; set; }
+
+        [StringLength(500)]
+        public string? Reason { get; set; }
+    }
+
     // Library Dashboard DTOs
     public class LibraryDashboardDTO
     {

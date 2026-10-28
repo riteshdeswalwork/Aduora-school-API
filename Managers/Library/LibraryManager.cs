@@ -777,7 +777,54 @@ namespace sms.api.Managers.Library
                 .FirstOrDefaultAsync(m => m.MembershipNumber == membershipNumber && m.IsActive);
             return member == null ? null : MapLibraryMemberToDTO(member);
         }
-        public Task<LibraryMemberDTO> CreateLibraryMemberAsync(CreateLibraryMemberDTO createDto, Guid createdByUserId) => throw new NotImplementedException();
+        public async Task<LibraryMemberDTO> CreateLibraryMemberAsync(CreateLibraryMemberDTO createDto, Guid createdByUserId)
+        {
+            var userExists = await _context.Users.AnyAsync(u => u.Id == createDto.UserId);
+            if (!userExists)
+                throw new InvalidOperationException("User not found.");
+
+            var alreadyMember = await _context.LibraryMembers.AnyAsync(m => m.UserId == createDto.UserId && m.IsActive);
+            if (alreadyMember)
+                throw new InvalidOperationException("This user already has an active library membership.");
+
+            var numberTaken = await _context.LibraryMembers.AnyAsync(m => m.MembershipNumber == createDto.MembershipNumber);
+            if (numberTaken)
+                throw new InvalidOperationException("Membership number is already in use.");
+
+            if (_context.CurrentAcademicYearId == null)
+                throw new InvalidOperationException("No active academic year selected.");
+
+            var member = new LibraryMember
+            {
+                Id = Guid.NewGuid(),
+                UserId = createDto.UserId,
+                AcademicYearId = _context.CurrentAcademicYearId.Value,
+                MembershipNumber = createDto.MembershipNumber,
+                MemberType = createDto.MemberType,
+                MembershipStartDate = DateTime.UtcNow,
+                MembershipEndDate = createDto.MembershipEndDate,
+                MaxBooksAllowed = createDto.MaxBooksAllowed,
+                MaxIssueDays = createDto.MaxIssueDays,
+                MaxRenewalCount = createDto.MaxRenewalCount,
+                Address = createDto.Address,
+                Phone = createDto.Phone,
+                Email = createDto.Email,
+                EmergencyContact = createDto.EmergencyContact,
+                EmergencyPhone = createDto.EmergencyPhone,
+                IsActive = true,
+                CreatedByUserId = createdByUserId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.LibraryMembers.Add(member);
+            await _context.SaveChangesAsync();
+
+            var created = await _context.LibraryMembers
+                .Include(m => m.User)
+                .Include(m => m.BookIssues)
+                .FirstAsync(m => m.Id == member.Id);
+            return MapLibraryMemberToDTO(created);
+        }
         public Task<LibraryMemberDTO?> UpdateLibraryMemberAsync(Guid id, CreateLibraryMemberDTO updateDto) => throw new NotImplementedException();
         public Task<bool> DeleteLibraryMemberAsync(Guid id) => throw new NotImplementedException();
         public Task<bool> SuspendLibraryMemberAsync(Guid id, string reason, DateTime? suspensionEndDate = null) => throw new NotImplementedException();
@@ -807,8 +854,100 @@ namespace sms.api.Managers.Library
         public Task<IEnumerable<BookIssueDTO>> GetBookIssuesByBookAsync(Guid bookId) => throw new NotImplementedException();
         public Task<IEnumerable<BookIssueDTO>> GetActiveBookIssuesAsync() => throw new NotImplementedException();
         public Task<IEnumerable<BookIssueDTO>> GetOverdueBookIssuesAsync() => throw new NotImplementedException();
-        public Task<BookIssueDTO> IssueBookAsync(CreateBookIssueDTO createDto, Guid issuedByUserId) => throw new NotImplementedException();
-        public Task<BookIssueDTO?> ReturnBookAsync(Guid issueId, string? returnCondition = null, string? returnNotes = null, Guid? returnedByUserId = null) => throw new NotImplementedException();
+        public async Task<BookIssueDTO> IssueBookAsync(CreateBookIssueDTO createDto, Guid issuedByUserId)
+        {
+            var book = await _context.Books.FirstOrDefaultAsync(b => b.Id == createDto.BookId);
+            if (book == null)
+                throw new InvalidOperationException("Book not found.");
+            if (!book.IsAvailable)
+                throw new InvalidOperationException("This book is not available to issue.");
+
+            var member = await _context.LibraryMembers.FirstOrDefaultAsync(m => m.Id == createDto.LibraryMemberId);
+            if (member == null)
+                throw new InvalidOperationException("Library member not found.");
+            if (!member.CanIssueBooks)
+                throw new InvalidOperationException("This member is not eligible to issue books (inactive, suspended, at their book limit, or has a pending fine).");
+
+            if (_context.CurrentAcademicYearId == null)
+                throw new InvalidOperationException("No active academic year selected.");
+
+            var issueDate = createDto.IssueDate ?? DateTime.UtcNow;
+            var issueDays = createDto.IssueDays ?? member.MaxIssueDays;
+
+            var issue = new BookIssue
+            {
+                Id = Guid.NewGuid(),
+                BookId = book.Id,
+                LibraryMemberId = member.Id,
+                AcademicYearId = _context.CurrentAcademicYearId.Value,
+                IssueNumber = "ISS" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"),
+                IssueDate = issueDate,
+                DueDate = issueDate.AddDays(issueDays),
+                IssueNotes = createDto.IssueNotes,
+                SpecialInstructions = createDto.SpecialInstructions,
+                IssuedByUserId = issuedByUserId,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            book.IsAvailable = false;
+            member.CurrentBooksIssued += 1;
+            member.TotalBooksIssued += 1;
+
+            // Fulfil a pending reservation this member holds for this book, if any.
+            var reservation = await _context.BookReservations
+                .Where(r => r.BookId == book.Id && r.LibraryMemberId == member.Id && r.Status == "Active")
+                .OrderBy(r => r.Priority)
+                .FirstOrDefaultAsync();
+            if (reservation != null)
+            {
+                reservation.Status = "Fulfilled";
+                reservation.FulfilledDate = DateTime.UtcNow;
+                reservation.FulfilledByUserId = issuedByUserId;
+                reservation.BookIssueId = issue.Id;
+            }
+
+            _context.BookIssues.Add(issue);
+            await _context.SaveChangesAsync();
+
+            var created = await _context.BookIssues
+                .Include(i => i.Book)
+                .Include(i => i.LibraryMember).ThenInclude(m => m.User)
+                .Include(i => i.IssuedBy)
+                .FirstAsync(i => i.Id == issue.Id);
+            return MapBookIssueToDTO(created);
+        }
+        public async Task<BookIssueDTO?> ReturnBookAsync(Guid issueId, string? returnCondition = null, string? returnNotes = null, Guid? returnedByUserId = null)
+        {
+            var issue = await _context.BookIssues
+                .Include(i => i.Book)
+                .Include(i => i.LibraryMember)
+                .FirstOrDefaultAsync(i => i.Id == issueId && i.IsActive);
+            if (issue == null)
+                return null;
+            if (issue.IsReturned)
+                throw new InvalidOperationException("This book issue has already been returned.");
+
+            issue.IsReturned = true;
+            issue.ReturnDate = DateTime.UtcNow;
+            issue.ReturnCondition = returnCondition;
+            issue.ReturnNotes = returnNotes;
+            issue.ReturnedByUserId = returnedByUserId;
+
+            if (issue.Book != null)
+                issue.Book.IsAvailable = true;
+            if (issue.LibraryMember != null)
+                issue.LibraryMember.CurrentBooksIssued = Math.Max(0, issue.LibraryMember.CurrentBooksIssued - 1);
+
+            await _context.SaveChangesAsync();
+
+            var updated = await _context.BookIssues
+                .Include(i => i.Book)
+                .Include(i => i.LibraryMember).ThenInclude(m => m.User)
+                .Include(i => i.IssuedBy)
+                .FirstAsync(i => i.Id == issue.Id);
+            return MapBookIssueToDTO(updated);
+        }
         public Task<BookIssueDTO?> RenewBookAsync(Guid issueId, int? additionalDays = null) => throw new NotImplementedException();
         public Task<bool> ReportLostBookAsync(Guid issueId, string description, decimal? replacementCost = null) => throw new NotImplementedException();
         public Task<bool> ReportDamagedBookAsync(Guid issueId, string description, decimal? repairCost = null) => throw new NotImplementedException();
@@ -836,7 +975,56 @@ namespace sms.api.Managers.Library
         public Task<IEnumerable<BookReservationDTO>> GetBookReservationsByMemberAsync(Guid memberId) => throw new NotImplementedException();
         public Task<IEnumerable<BookReservationDTO>> GetBookReservationsByBookAsync(Guid bookId) => throw new NotImplementedException();
         public Task<IEnumerable<BookReservationDTO>> GetActiveBookReservationsAsync() => throw new NotImplementedException();
-        public Task<BookReservationDTO> CreateBookReservationAsync(CreateBookReservationDTO createDto, Guid createdByUserId) => throw new NotImplementedException();
+        public async Task<BookReservationDTO> CreateBookReservationAsync(CreateBookReservationDTO createDto, Guid createdByUserId)
+        {
+            var book = await _context.Books.FirstOrDefaultAsync(b => b.Id == createDto.BookId);
+            if (book == null)
+                throw new InvalidOperationException("Book not found.");
+
+            var member = await _context.LibraryMembers.FirstOrDefaultAsync(m => m.Id == createDto.LibraryMemberId);
+            if (member == null)
+                throw new InvalidOperationException("Library member not found.");
+            if (!member.IsActive || member.IsSuspended)
+                throw new InvalidOperationException("This member is not eligible to reserve books.");
+
+            var alreadyReserved = await _context.BookReservations
+                .AnyAsync(r => r.BookId == book.Id && r.LibraryMemberId == member.Id && r.Status == "Active");
+            if (alreadyReserved)
+                throw new InvalidOperationException("This member already has an active reservation for this book.");
+
+            if (_context.CurrentAcademicYearId == null)
+                throw new InvalidOperationException("No active academic year selected.");
+
+            var queueLength = await _context.BookReservations
+                .CountAsync(r => r.BookId == book.Id && r.Status == "Active");
+
+            var reservation = new BookReservation
+            {
+                Id = Guid.NewGuid(),
+                BookId = book.Id,
+                LibraryMemberId = member.Id,
+                AcademicYearId = _context.CurrentAcademicYearId.Value,
+                ReservationNumber = "RES" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"),
+                ReservationDate = DateTime.UtcNow,
+                ExpiryDate = createDto.ExpiryDate ?? DateTime.UtcNow.AddDays(7),
+                Status = "Active",
+                Priority = queueLength + 1,
+                ReservationNotes = createDto.ReservationNotes,
+                RequestedEdition = createDto.RequestedEdition,
+                SpecialRequirements = createDto.SpecialRequirements,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.BookReservations.Add(reservation);
+            await _context.SaveChangesAsync();
+
+            var created = await _context.BookReservations
+                .Include(r => r.Book)
+                .Include(r => r.LibraryMember).ThenInclude(m => m.User)
+                .Include(r => r.FulfilledBy)
+                .FirstAsync(r => r.Id == reservation.Id);
+            return MapBookReservationToDTO(created);
+        }
         public Task<bool> CancelBookReservationAsync(Guid id, string? reason = null, Guid? cancelledByUserId = null) => throw new NotImplementedException();
         public Task<BookIssueDTO?> FulfillBookReservationAsync(Guid reservationId, Guid fulfilledByUserId) => throw new NotImplementedException();
         public async Task<IEnumerable<LibraryFineDTO>> GetAllLibraryFinesAsync()
@@ -857,6 +1045,55 @@ namespace sms.api.Managers.Library
                 .FirstOrDefaultAsync(f => f.Id == id);
             return fine == null ? null : MapLibraryFineToDTO(fine);
         }
+        public async Task<LibraryFineDTO> CreateLibraryFineAsync(CreateLibraryFineDTO createDto, Guid createdByUserId)
+        {
+            var member = await _context.LibraryMembers.FirstOrDefaultAsync(m => m.Id == createDto.LibraryMemberId);
+            if (member == null)
+                throw new InvalidOperationException("Library member not found.");
+
+            if (createDto.BookIssueId.HasValue)
+            {
+                var issueExists = await _context.BookIssues.AnyAsync(i => i.Id == createDto.BookIssueId.Value && i.LibraryMemberId == member.Id);
+                if (!issueExists)
+                    throw new InvalidOperationException("Book issue not found for this member.");
+            }
+
+            if (_context.CurrentAcademicYearId == null)
+                throw new InvalidOperationException("No active academic year selected.");
+
+            var fine = new LibraryFine
+            {
+                Id = Guid.NewGuid(),
+                LibraryMemberId = member.Id,
+                AcademicYearId = _context.CurrentAcademicYearId.Value,
+                BookIssueId = createDto.BookIssueId,
+                FineNumber = "FIN" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"),
+                FineType = createDto.FineType,
+                Amount = createDto.Amount,
+                PaidAmount = 0,
+                PendingAmount = createDto.Amount,
+                Status = "Pending",
+                FineDate = DateTime.UtcNow,
+                DueDate = createDto.DueDate,
+                Description = createDto.Description,
+                Reason = createDto.Reason,
+                CreatedByUserId = createdByUserId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            member.TotalFineAmount += createDto.Amount;
+            member.PendingFineAmount += createDto.Amount;
+
+            _context.LibraryFines.Add(fine);
+            await _context.SaveChangesAsync();
+
+            var created = await _context.LibraryFines
+                .Include(f => f.LibraryMember).ThenInclude(m => m.User)
+                .Include(f => f.BookIssue).ThenInclude(i => i.Book)
+                .FirstAsync(f => f.Id == fine.Id);
+            return MapLibraryFineToDTO(created);
+        }
+
         public Task<IEnumerable<LibraryFineDTO>> GetLibraryFinesByMemberAsync(Guid memberId) => throw new NotImplementedException();
         public Task<IEnumerable<LibraryFineDTO>> GetPendingLibraryFinesAsync() => throw new NotImplementedException();
         public Task<bool> PayLibraryFineAsync(Guid fineId, decimal amount, string paymentMethod, string? paymentReference = null, Guid? receivedByUserId = null) => throw new NotImplementedException();

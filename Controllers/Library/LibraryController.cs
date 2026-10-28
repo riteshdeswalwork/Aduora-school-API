@@ -114,6 +114,30 @@ namespace sms.api.Controllers.Library
             }
         }
 
+        [HttpPost("members")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> CreateMember([FromBody] CreateLibraryMemberDTO createDto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new UnauthorizedAccessException());
+                var member = await _libraryManager.CreateLibraryMemberAsync(createDto, userId);
+
+                return CreatedAtAction(nameof(GetMemberById), new { id = member.Id }, member);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error creating library member", error = ex.Message });
+            }
+        }
+
         #endregion
 
         #region Issues
@@ -144,6 +168,30 @@ namespace sms.api.Controllers.Library
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error retrieving book issue", error = ex.Message });
+            }
+        }
+
+        [HttpPost("issues")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> IssueBook([FromBody] CreateBookIssueDTO createDto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new UnauthorizedAccessException());
+                var issue = await _libraryManager.IssueBookAsync(createDto, userId);
+
+                return CreatedAtAction(nameof(GetIssueById), new { id = issue.Id }, issue);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error issuing book", error = ex.Message });
             }
         }
 
@@ -180,6 +228,30 @@ namespace sms.api.Controllers.Library
             }
         }
 
+        [HttpPost("fines")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> CreateFine([FromBody] CreateLibraryFineDTO createDto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new UnauthorizedAccessException());
+                var fine = await _libraryManager.CreateLibraryFineAsync(createDto, userId);
+
+                return CreatedAtAction(nameof(GetFineById), new { id = fine.Id }, fine);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error creating library fine", error = ex.Message });
+            }
+        }
+
         #endregion
 
         #region Reservations
@@ -210,6 +282,30 @@ namespace sms.api.Controllers.Library
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error retrieving book reservation", error = ex.Message });
+            }
+        }
+
+        [HttpPost("reservations")]
+        [Authorize(Roles = "Admin,Staff")]
+        public async Task<IActionResult> CreateReservation([FromBody] CreateBookReservationDTO createDto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new UnauthorizedAccessException());
+                var reservation = await _libraryManager.CreateBookReservationAsync(createDto, userId);
+
+                return CreatedAtAction(nameof(GetReservationById), new { id = reservation.Id }, reservation);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error creating book reservation", error = ex.Message });
             }
         }
 

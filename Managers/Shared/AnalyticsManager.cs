@@ -220,7 +220,8 @@ namespace sms.api.Managers.Shared
                 .AsQueryable();
 
             if (allowed != null)
-                feesQuery = feesQuery.Where(sf => sf.FeeStructure != null && allowed.Contains(sf.FeeStructure.ClassId));
+                feesQuery = feesQuery.Where(sf => sf.FeeStructure != null &&
+                    (sf.FeeStructure.ClassId == null || allowed.Contains(sf.FeeStructure.ClassId.Value)));
 
             var studentFees = await feesQuery.ToListAsync();
 

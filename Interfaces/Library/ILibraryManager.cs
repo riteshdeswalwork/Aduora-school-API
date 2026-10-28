@@ -69,6 +69,7 @@ namespace sms.api.Interfaces.Library
         Task<BookIssueDTO?> FulfillBookReservationAsync(Guid reservationId, Guid fulfilledByUserId);
         Task<IEnumerable<LibraryFineDTO>> GetAllLibraryFinesAsync();
         Task<LibraryFineDTO?> GetLibraryFineByIdAsync(Guid id);
+        Task<LibraryFineDTO> CreateLibraryFineAsync(CreateLibraryFineDTO createDto, Guid createdByUserId);
         Task<IEnumerable<LibraryFineDTO>> GetLibraryFinesByMemberAsync(Guid memberId);
         Task<IEnumerable<LibraryFineDTO>> GetPendingLibraryFinesAsync();
         Task<bool> PayLibraryFineAsync(Guid fineId, decimal amount, string paymentMethod, string? paymentReference = null, Guid? receivedByUserId = null);

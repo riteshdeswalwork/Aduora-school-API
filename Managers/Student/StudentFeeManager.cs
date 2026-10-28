@@ -66,7 +66,7 @@ namespace sms.api.Managers.Student
                 .Include(sf => sf.FeeStructure)
                 .Include(sf => sf.Payments)
                 .Include(sf => sf.Discounts)
-                .Where(sf => sf.FeeStructure.ClassId == classId)
+                .Where(sf => sf.FeeStructure.ClassId == classId || sf.FeeStructure.ClassId == null)
                 .OrderBy(sf => sf.Student.User.FirstName)
                 .ToListAsync();
         }
@@ -155,14 +155,14 @@ namespace sms.api.Managers.Student
         public async Task<decimal> GetTotalOutstandingByClassAsync(Guid classId)
         {
             return await _dbSet
-                .Where(sf => sf.FeeStructure.ClassId == classId)
+                .Where(sf => sf.FeeStructure.ClassId == classId || sf.FeeStructure.ClassId == null)
                 .SumAsync(sf => sf.OutstandingAmount);
         }
 
         public async Task<decimal> GetTotalCollectedByClassAsync(Guid classId)
         {
             return await _dbSet
-                .Where(sf => sf.FeeStructure.ClassId == classId)
+                .Where(sf => sf.FeeStructure.ClassId == classId || sf.FeeStructure.ClassId == null)
                 .SumAsync(sf => sf.PaidAmount);
         }
 
@@ -200,13 +200,13 @@ namespace sms.api.Managers.Student
                 query = query.Where(sf => sf.AcademicYearId == academicYearId.Value);
 
             if (classId.HasValue && classId.Value != Guid.Empty)
-                query = query.Where(sf => sf.FeeStructure.ClassId == classId.Value);
+                query = query.Where(sf => sf.FeeStructure.ClassId == classId.Value || sf.FeeStructure.ClassId == null);
 
             if (allowedClassIds != null)
             {
                 var classSet = allowedClassIds.ToList();
                 if (classSet.Count > 0)
-                    query = query.Where(sf => classSet.Contains(sf.FeeStructure.ClassId));
+                    query = query.Where(sf => sf.FeeStructure.ClassId == null || classSet.Contains(sf.FeeStructure.ClassId.Value));
                 else
                     query = query.Where(_ => false);
             }
@@ -292,7 +292,7 @@ namespace sms.api.Managers.Student
 
             foreach (var en in enrollments)
             {
-                foreach (var fs in monthlyStructures.Where(s => s.ClassId == en.ClassId))
+                foreach (var fs in monthlyStructures.Where(s => s.ClassId == en.ClassId || s.ClassId == null))
                 {
                     var lines = linesByStructure.GetValueOrDefault(fs.Id) ?? new List<FeeStructureLine>();
                     if (lines.Count > 0)
@@ -412,7 +412,7 @@ namespace sms.api.Managers.Student
             if (academicYearId.HasValue && academicYearId.Value != Guid.Empty)
                 q = q.Where(sf => sf.AcademicYearId == academicYearId.Value);
             if (classId.HasValue && classId.Value != Guid.Empty)
-                q = q.Where(sf => sf.FeeStructure != null && sf.FeeStructure.ClassId == classId.Value);
+                q = q.Where(sf => sf.FeeStructure != null && (sf.FeeStructure.ClassId == classId.Value || sf.FeeStructure.ClassId == null));
             if (startDate.HasValue)
                 q = q.Where(sf => sf.DueDate.Date >= startDate.Value.Date);
             if (endDate.HasValue)
@@ -458,7 +458,7 @@ namespace sms.api.Managers.Student
                 .Where(sf => sf.AcademicYearId == academicYearId && sf.OutstandingAmount > 0 && sf.DueDate.Date < today);
 
             if (classId.HasValue && classId.Value != Guid.Empty)
-                q = q.Where(sf => sf.FeeStructure != null && sf.FeeStructure.ClassId == classId.Value);
+                q = q.Where(sf => sf.FeeStructure != null && (sf.FeeStructure.ClassId == classId.Value || sf.FeeStructure.ClassId == null));
 
             var list = await q.OrderByDescending(sf => sf.DueDate).ToListAsync();
             var result = new List<FeeDefaulterRowDto>();
@@ -557,7 +557,7 @@ namespace sms.api.Managers.Student
 
             var studentIds = await _context.ClassEnrollments
                 .AsNoTracking()
-                .Where(e => e.AcademicYearId == academicYearId && e.IsActive && e.ClassId == fs.ClassId)
+                .Where(e => e.AcademicYearId == academicYearId && e.IsActive && (fs.ClassId == null || e.ClassId == fs.ClassId))
                 .Select(e => e.StudentId)
                 .Distinct()
                 .ToListAsync();

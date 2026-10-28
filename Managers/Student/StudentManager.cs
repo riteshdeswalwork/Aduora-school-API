@@ -120,6 +120,7 @@ namespace sms.api.Managers.Student
                     (s.User != null && (
                         (s.User.FirstName != null && s.User.FirstName.ToLower().Contains(term)) ||
                         (s.User.LastName != null && s.User.LastName.ToLower().Contains(term)) ||
+                        (s.User.FirstName != null && s.User.LastName != null && (s.User.FirstName + " " + s.User.LastName).ToLower().Contains(term)) ||
                         (s.User.Email != null && s.User.Email.ToLower().Contains(term)) ||
                         (s.User.Username != null && s.User.Username.ToLower().Contains(term)))) ||
                     (s.RegistrationNumber != null && s.RegistrationNumber.ToLower().Contains(term)) ||
