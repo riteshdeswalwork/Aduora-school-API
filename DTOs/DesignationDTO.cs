@@ -44,8 +44,7 @@ namespace sms.api.DTOs
         [StringLength(255, ErrorMessage = "Description cannot exceed 255 characters")]
         public string? Description { get; set; }
 
-        [Required(ErrorMessage = "Department is required")]
-        public Guid DepartmentId { get; set; }
+        public Guid? DepartmentId { get; set; }
 
         public bool IsActive { get; set; } = true;
     }
@@ -59,8 +58,7 @@ namespace sms.api.DTOs
         [StringLength(255, ErrorMessage = "Description cannot exceed 255 characters")]
         public string? Description { get; set; }
 
-        [Required(ErrorMessage = "Department is required")]
-        public Guid DepartmentId { get; set; }
+        public Guid? DepartmentId { get; set; }
 
         public bool IsActive { get; set; }
     }
