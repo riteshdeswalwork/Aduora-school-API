@@ -43,7 +43,7 @@ namespace sms.api.Interfaces.Library
         Task<LibraryMemberDTO?> GetLibraryMemberByIdAsync(Guid id);
         Task<LibraryMemberDTO?> GetLibraryMemberByUserIdAsync(Guid userId);
         Task<LibraryMemberDTO?> GetLibraryMemberByMembershipNumberAsync(string membershipNumber);
-        Task<LibraryMemberDTO> CreateLibraryMemberAsync(CreateLibraryMemberDTO createDto, Guid createdByUserId);
+        Task<LibraryMemberDTO> CreateLibraryMemberAsync(CreateLibraryMemberDTO createDto, Guid createdByUserId, Guid academicYearId);
         Task<LibraryMemberDTO?> UpdateLibraryMemberAsync(Guid id, CreateLibraryMemberDTO updateDto);
         Task<bool> DeleteLibraryMemberAsync(Guid id);
         Task<bool> SuspendLibraryMemberAsync(Guid id, string reason, DateTime? suspensionEndDate = null);
@@ -54,7 +54,7 @@ namespace sms.api.Interfaces.Library
         Task<IEnumerable<BookIssueDTO>> GetBookIssuesByBookAsync(Guid bookId);
         Task<IEnumerable<BookIssueDTO>> GetActiveBookIssuesAsync();
         Task<IEnumerable<BookIssueDTO>> GetOverdueBookIssuesAsync();
-        Task<BookIssueDTO> IssueBookAsync(CreateBookIssueDTO createDto, Guid issuedByUserId);
+        Task<BookIssueDTO> IssueBookAsync(CreateBookIssueDTO createDto, Guid issuedByUserId, Guid academicYearId);
         Task<BookIssueDTO?> ReturnBookAsync(Guid issueId, string? returnCondition = null, string? returnNotes = null, Guid? returnedByUserId = null);
         Task<BookIssueDTO?> RenewBookAsync(Guid issueId, int? additionalDays = null);
         Task<bool> ReportLostBookAsync(Guid issueId, string description, decimal? replacementCost = null);
@@ -64,12 +64,12 @@ namespace sms.api.Interfaces.Library
         Task<IEnumerable<BookReservationDTO>> GetBookReservationsByMemberAsync(Guid memberId);
         Task<IEnumerable<BookReservationDTO>> GetBookReservationsByBookAsync(Guid bookId);
         Task<IEnumerable<BookReservationDTO>> GetActiveBookReservationsAsync();
-        Task<BookReservationDTO> CreateBookReservationAsync(CreateBookReservationDTO createDto, Guid createdByUserId);
+        Task<BookReservationDTO> CreateBookReservationAsync(CreateBookReservationDTO createDto, Guid createdByUserId, Guid academicYearId);
         Task<bool> CancelBookReservationAsync(Guid id, string? reason = null, Guid? cancelledByUserId = null);
         Task<BookIssueDTO?> FulfillBookReservationAsync(Guid reservationId, Guid fulfilledByUserId);
         Task<IEnumerable<LibraryFineDTO>> GetAllLibraryFinesAsync();
         Task<LibraryFineDTO?> GetLibraryFineByIdAsync(Guid id);
-        Task<LibraryFineDTO> CreateLibraryFineAsync(CreateLibraryFineDTO createDto, Guid createdByUserId);
+        Task<LibraryFineDTO> CreateLibraryFineAsync(CreateLibraryFineDTO createDto, Guid createdByUserId, Guid academicYearId);
         Task<IEnumerable<LibraryFineDTO>> GetLibraryFinesByMemberAsync(Guid memberId);
         Task<IEnumerable<LibraryFineDTO>> GetPendingLibraryFinesAsync();
         Task<bool> PayLibraryFineAsync(Guid fineId, decimal amount, string paymentMethod, string? paymentReference = null, Guid? receivedByUserId = null);

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using sms.api.DTOs;
 using sms.api.Interfaces;
+using sms.api.Middleware;
 using System.Security.Claims;
 
 namespace sms.api.Controllers.Library
@@ -16,6 +17,16 @@ namespace sms.api.Controllers.Library
         public LibraryController(ILibraryManager libraryManager)
         {
             _libraryManager = libraryManager;
+        }
+
+        /// <summary>Academic year selected in the frontend header (from X-Academic-Year-Id).</summary>
+        private Guid? GetCurrentAcademicYearId()
+        {
+            if (HttpContext.Items.TryGetValue(AcademicYearHeaderMiddleware.HttpContextKey, out var obj) && obj is Guid id)
+                return id;
+            if (Request.Headers.TryGetValue(AcademicYearHeaderMiddleware.HeaderName, out var v) && Guid.TryParse(v.ToString().Trim(), out var parsed))
+                return parsed;
+            return null;
         }
 
         #region Dashboard
@@ -123,8 +134,12 @@ namespace sms.api.Controllers.Library
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
+                var academicYearId = GetCurrentAcademicYearId();
+                if (academicYearId == null)
+                    return BadRequest(new { message = "No active academic year selected." });
+
                 var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new UnauthorizedAccessException());
-                var member = await _libraryManager.CreateLibraryMemberAsync(createDto, userId);
+                var member = await _libraryManager.CreateLibraryMemberAsync(createDto, userId, academicYearId.Value);
 
                 return CreatedAtAction(nameof(GetMemberById), new { id = member.Id }, member);
             }
@@ -180,8 +195,12 @@ namespace sms.api.Controllers.Library
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
+                var academicYearId = GetCurrentAcademicYearId();
+                if (academicYearId == null)
+                    return BadRequest(new { message = "No active academic year selected." });
+
                 var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new UnauthorizedAccessException());
-                var issue = await _libraryManager.IssueBookAsync(createDto, userId);
+                var issue = await _libraryManager.IssueBookAsync(createDto, userId, academicYearId.Value);
 
                 return CreatedAtAction(nameof(GetIssueById), new { id = issue.Id }, issue);
             }
@@ -237,8 +256,12 @@ namespace sms.api.Controllers.Library
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
+                var academicYearId = GetCurrentAcademicYearId();
+                if (academicYearId == null)
+                    return BadRequest(new { message = "No active academic year selected." });
+
                 var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new UnauthorizedAccessException());
-                var fine = await _libraryManager.CreateLibraryFineAsync(createDto, userId);
+                var fine = await _libraryManager.CreateLibraryFineAsync(createDto, userId, academicYearId.Value);
 
                 return CreatedAtAction(nameof(GetFineById), new { id = fine.Id }, fine);
             }
@@ -294,8 +317,12 @@ namespace sms.api.Controllers.Library
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
+                var academicYearId = GetCurrentAcademicYearId();
+                if (academicYearId == null)
+                    return BadRequest(new { message = "No active academic year selected." });
+
                 var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? throw new UnauthorizedAccessException());
-                var reservation = await _libraryManager.CreateBookReservationAsync(createDto, userId);
+                var reservation = await _libraryManager.CreateBookReservationAsync(createDto, userId, academicYearId.Value);
 
                 return CreatedAtAction(nameof(GetReservationById), new { id = reservation.Id }, reservation);
             }

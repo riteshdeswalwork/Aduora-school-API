@@ -777,7 +777,7 @@ namespace sms.api.Managers.Library
                 .FirstOrDefaultAsync(m => m.MembershipNumber == membershipNumber && m.IsActive);
             return member == null ? null : MapLibraryMemberToDTO(member);
         }
-        public async Task<LibraryMemberDTO> CreateLibraryMemberAsync(CreateLibraryMemberDTO createDto, Guid createdByUserId)
+        public async Task<LibraryMemberDTO> CreateLibraryMemberAsync(CreateLibraryMemberDTO createDto, Guid createdByUserId, Guid academicYearId)
         {
             var userExists = await _context.Users.AnyAsync(u => u.Id == createDto.UserId);
             if (!userExists)
@@ -791,14 +791,11 @@ namespace sms.api.Managers.Library
             if (numberTaken)
                 throw new InvalidOperationException("Membership number is already in use.");
 
-            if (_context.CurrentAcademicYearId == null)
-                throw new InvalidOperationException("No active academic year selected.");
-
             var member = new LibraryMember
             {
                 Id = Guid.NewGuid(),
                 UserId = createDto.UserId,
-                AcademicYearId = _context.CurrentAcademicYearId.Value,
+                AcademicYearId = academicYearId,
                 MembershipNumber = createDto.MembershipNumber,
                 MemberType = createDto.MemberType,
                 MembershipStartDate = DateTime.UtcNow,
@@ -854,7 +851,7 @@ namespace sms.api.Managers.Library
         public Task<IEnumerable<BookIssueDTO>> GetBookIssuesByBookAsync(Guid bookId) => throw new NotImplementedException();
         public Task<IEnumerable<BookIssueDTO>> GetActiveBookIssuesAsync() => throw new NotImplementedException();
         public Task<IEnumerable<BookIssueDTO>> GetOverdueBookIssuesAsync() => throw new NotImplementedException();
-        public async Task<BookIssueDTO> IssueBookAsync(CreateBookIssueDTO createDto, Guid issuedByUserId)
+        public async Task<BookIssueDTO> IssueBookAsync(CreateBookIssueDTO createDto, Guid issuedByUserId, Guid academicYearId)
         {
             var book = await _context.Books.FirstOrDefaultAsync(b => b.Id == createDto.BookId);
             if (book == null)
@@ -868,9 +865,6 @@ namespace sms.api.Managers.Library
             if (!member.CanIssueBooks)
                 throw new InvalidOperationException("This member is not eligible to issue books (inactive, suspended, at their book limit, or has a pending fine).");
 
-            if (_context.CurrentAcademicYearId == null)
-                throw new InvalidOperationException("No active academic year selected.");
-
             var issueDate = createDto.IssueDate ?? DateTime.UtcNow;
             var issueDays = createDto.IssueDays ?? member.MaxIssueDays;
 
@@ -879,7 +873,7 @@ namespace sms.api.Managers.Library
                 Id = Guid.NewGuid(),
                 BookId = book.Id,
                 LibraryMemberId = member.Id,
-                AcademicYearId = _context.CurrentAcademicYearId.Value,
+                AcademicYearId = academicYearId,
                 IssueNumber = "ISS" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"),
                 IssueDate = issueDate,
                 DueDate = issueDate.AddDays(issueDays),
@@ -975,7 +969,7 @@ namespace sms.api.Managers.Library
         public Task<IEnumerable<BookReservationDTO>> GetBookReservationsByMemberAsync(Guid memberId) => throw new NotImplementedException();
         public Task<IEnumerable<BookReservationDTO>> GetBookReservationsByBookAsync(Guid bookId) => throw new NotImplementedException();
         public Task<IEnumerable<BookReservationDTO>> GetActiveBookReservationsAsync() => throw new NotImplementedException();
-        public async Task<BookReservationDTO> CreateBookReservationAsync(CreateBookReservationDTO createDto, Guid createdByUserId)
+        public async Task<BookReservationDTO> CreateBookReservationAsync(CreateBookReservationDTO createDto, Guid createdByUserId, Guid academicYearId)
         {
             var book = await _context.Books.FirstOrDefaultAsync(b => b.Id == createDto.BookId);
             if (book == null)
@@ -992,9 +986,6 @@ namespace sms.api.Managers.Library
             if (alreadyReserved)
                 throw new InvalidOperationException("This member already has an active reservation for this book.");
 
-            if (_context.CurrentAcademicYearId == null)
-                throw new InvalidOperationException("No active academic year selected.");
-
             var queueLength = await _context.BookReservations
                 .CountAsync(r => r.BookId == book.Id && r.Status == "Active");
 
@@ -1003,7 +994,7 @@ namespace sms.api.Managers.Library
                 Id = Guid.NewGuid(),
                 BookId = book.Id,
                 LibraryMemberId = member.Id,
-                AcademicYearId = _context.CurrentAcademicYearId.Value,
+                AcademicYearId = academicYearId,
                 ReservationNumber = "RES" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"),
                 ReservationDate = DateTime.UtcNow,
                 ExpiryDate = createDto.ExpiryDate ?? DateTime.UtcNow.AddDays(7),
@@ -1045,7 +1036,7 @@ namespace sms.api.Managers.Library
                 .FirstOrDefaultAsync(f => f.Id == id);
             return fine == null ? null : MapLibraryFineToDTO(fine);
         }
-        public async Task<LibraryFineDTO> CreateLibraryFineAsync(CreateLibraryFineDTO createDto, Guid createdByUserId)
+        public async Task<LibraryFineDTO> CreateLibraryFineAsync(CreateLibraryFineDTO createDto, Guid createdByUserId, Guid academicYearId)
         {
             var member = await _context.LibraryMembers.FirstOrDefaultAsync(m => m.Id == createDto.LibraryMemberId);
             if (member == null)
@@ -1058,14 +1049,11 @@ namespace sms.api.Managers.Library
                     throw new InvalidOperationException("Book issue not found for this member.");
             }
 
-            if (_context.CurrentAcademicYearId == null)
-                throw new InvalidOperationException("No active academic year selected.");
-
             var fine = new LibraryFine
             {
                 Id = Guid.NewGuid(),
                 LibraryMemberId = member.Id,
-                AcademicYearId = _context.CurrentAcademicYearId.Value,
+                AcademicYearId = academicYearId,
                 BookIssueId = createDto.BookIssueId,
                 FineNumber = "FIN" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"),
                 FineType = createDto.FineType,
