@@ -52,6 +52,47 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
         options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        // Accept "HH:mm" (no seconds) in addition to the default "HH:mm:ss" for TimeSpan/TimeSpan?
+        // fields — this is what <input type="time"> sends from the admin panel's Add/Edit forms
+        // (exams, periods, bus routes, bus stops), and the default converter rejects it outright.
+        options.JsonSerializerOptions.Converters.Add(new sms.api.Helpers.LenientTimeSpanJsonConverter());
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // The default [ApiController] 400 response for an invalid ModelState only surfaces the
+        // generic "One or more validation errors occurred." title to callers that read `message`/
+        // `error` (the admin frontend's toast does exactly that and ignores the `errors` dictionary),
+        // so a failed form submission always shows that one useless line no matter which field or
+        // binding step actually failed. Keep the standard ValidationProblemDetails shape (title +
+        // per-field `errors`) but also add a flat `message` summarizing every field error, so the
+        // existing frontend error handling shows something actionable without any frontend change.
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var problemDetails = new Microsoft.AspNetCore.Mvc.ValidationProblemDetails(context.ModelState)
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "One or more validation errors occurred.",
+                Instance = context.HttpContext.Request.Path
+            };
+
+            var fieldErrors = context.ModelState
+                .Where(kvp => kvp.Value?.Errors.Count > 0)
+                .SelectMany(kvp => kvp.Value!.Errors.Select(e =>
+                    string.IsNullOrEmpty(kvp.Key) || kvp.Key == "$"
+                        ? e.ErrorMessage
+                        : $"{kvp.Key}: {e.ErrorMessage}"))
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .ToList();
+
+            problemDetails.Extensions["message"] = fieldErrors.Count > 0
+                ? string.Join(" | ", fieldErrors)
+                : problemDetails.Title;
+
+            return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(problemDetails)
+            {
+                ContentTypes = { "application/json" }
+            };
+        };
     });
 
 // Configure DbContext
