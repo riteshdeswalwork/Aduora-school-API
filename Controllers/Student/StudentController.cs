@@ -924,18 +924,27 @@ namespace sms.api.Controllers.Student
             }
             catch (Exception ex)
             {
-                // Check if it's a foreign key constraint error
-                if (ex.Message.Contains("FOREIGN KEY constraint") || ex.Message.Contains("foreign key"))
+                // Not a bug — the student genuinely has related records (attendance, fees, exam
+                // results, etc.). Surface this as an expected, informational outcome rather than
+                // a raw error, so the frontend can show it as an info message, not a scary one.
+                if (IsRelatedDataConflict(ex.Message))
                 {
-                    return BadRequest(new {
-                        message = "Cannot delete student",
-                        error = "This student has associated records (attendance, fees, etc.) that must be removed first.",
-                        suggestion = "Please remove all related records before deleting the student, or contact administrator for help."
+                    return Conflict(new {
+                        message = "This student has related records (attendance, fees, exam results, etc.) that prevent deletion. Deactivate the student instead if you want to remove them from active lists while keeping their history.",
+                        isRelatedDataConflict = true
                     });
                 }
 
                 return StatusCode(500, new { message = "Error deleting student", error = ex.Message });
             }
+        }
+
+        private static bool IsRelatedDataConflict(string? message)
+        {
+            if (string.IsNullOrEmpty(message)) return false;
+            return message.Contains("FOREIGN KEY constraint", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("REFERENCE constraint", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("conflicted with the", StringComparison.OrdinalIgnoreCase);
         }
 
         [HttpPut("{id}/deactivate")]

@@ -382,8 +382,27 @@ namespace sms.api.Controllers.Staff
             }
             catch (Exception ex)
             {
+                // Not a bug — the staff member genuinely has related records (attendance,
+                // payroll, class assignments, etc.). Surface this as an expected, informational
+                // outcome rather than a raw error, so the frontend can show it as an info message.
+                if (IsRelatedDataConflict(ex.Message))
+                {
+                    return Conflict(new {
+                        message = "This staff member has related records (attendance, payroll, class assignments, etc.) that prevent deletion. Deactivate them instead if you want to remove them from active lists while keeping their history.",
+                        isRelatedDataConflict = true
+                    });
+                }
+
                 return StatusCode(500, new { message = "Error deleting staff member", error = ex.Message });
             }
+        }
+
+        private static bool IsRelatedDataConflict(string? message)
+        {
+            if (string.IsNullOrEmpty(message)) return false;
+            return message.Contains("FOREIGN KEY constraint", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("REFERENCE constraint", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("conflicted with the", StringComparison.OrdinalIgnoreCase);
         }
 
         [HttpGet("dashboard")]

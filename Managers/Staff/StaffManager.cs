@@ -357,9 +357,9 @@ namespace sms.api.Managers.Staff
             }
             catch (Exception ex)
             {
-                // Log the error (you can add logging here)
-                // If there are foreign key constraints, we might need to handle them
-                throw new InvalidOperationException($"Cannot delete staff member. There might be related records that prevent deletion: {ex.Message}", ex);
+                // If there are foreign key constraints, the real detail is on the inner exception
+                var detail = ex.InnerException?.Message ?? ex.Message;
+                throw new InvalidOperationException($"Cannot delete staff member. There might be related records that prevent deletion: {detail}", ex);
             }
         }
     }

@@ -486,7 +486,8 @@ namespace sms.api.Managers.Student
             {
                 // Rollback transaction on error
                 await transaction.RollbackAsync();
-                throw new InvalidOperationException($"Cannot delete student. Error occurred: {ex.Message}", ex);
+                var detail = ex.InnerException?.Message ?? ex.Message;
+                throw new InvalidOperationException($"Cannot delete student. Error occurred: {detail}", ex);
             }
         }
     }

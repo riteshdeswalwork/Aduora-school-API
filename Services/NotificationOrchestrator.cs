@@ -84,6 +84,18 @@ public class NotificationOrchestrator : INotificationOrchestrator
             }
         }
 
+        if (userIds.Count > 0)
+        {
+            // Config-supplied ids (e.g. Notifications:AdminUserIds) aren't guaranteed to exist —
+            // a stale/wrong id here would otherwise crash the whole dispatch with an
+            // InAppNotifications_Users_UserId FK violation. Keep only ids that are real users.
+            var existingIds = await db.Users.AsNoTracking()
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => u.Id)
+                .ToListAsync(ct);
+            userIds = new HashSet<Guid>(existingIds);
+        }
+
         result.RecipientCount = userIds.Count;
 
         var channels = request.Channels;
