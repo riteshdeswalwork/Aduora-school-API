@@ -32,7 +32,7 @@ namespace sms.api.Controllers.Academic
                 }
                 return Ok(examDtos);
             }
-            else if (User.IsInRole("Staff"))
+            else if (User.IsInRole("Staff") || User.IsInRole("Teacher"))
             {
                 var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(staffIdClaim))
@@ -60,7 +60,7 @@ namespace sms.api.Controllers.Academic
             {
                 return Ok(exam);
             }
-            else if (User.IsInRole("Staff"))
+            else if (User.IsInRole("Staff") || User.IsInRole("Teacher"))
             {
                 var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(staffIdClaim))
@@ -87,7 +87,7 @@ namespace sms.api.Controllers.Academic
                 var exams = await _examManager.GetExamsByClassAsync(classId);
                 return Ok(exams);
             }
-            else if (User.IsInRole("Staff"))
+            else if (User.IsInRole("Staff") || User.IsInRole("Teacher"))
             {
                 var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(staffIdClaim))
@@ -112,7 +112,7 @@ namespace sms.api.Controllers.Academic
                 var exams = await _examManager.GetExamsBySubjectAsync(subjectId);
                 return Ok(exams);
             }
-            else if (User.IsInRole("Staff"))
+            else if (User.IsInRole("Staff") || User.IsInRole("Teacher"))
             {
                 var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(staffIdClaim))
@@ -137,7 +137,7 @@ namespace sms.api.Controllers.Academic
                 var exams = await _examManager.GetUpcomingExamsAsync();
                 return Ok(exams);
             }
-            else if (User.IsInRole("Staff"))
+            else if (User.IsInRole("Staff") || User.IsInRole("Teacher"))
             {
                 var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(staffIdClaim))
@@ -203,7 +203,7 @@ namespace sms.api.Controllers.Academic
                 var exams = await _examManager.GetExamsByAcademicYearAsync(academicYear);
                 return Ok(exams);
             }
-            else if (User.IsInRole("Staff"))
+            else if (User.IsInRole("Staff") || User.IsInRole("Teacher"))
             {
                 var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(staffIdClaim))

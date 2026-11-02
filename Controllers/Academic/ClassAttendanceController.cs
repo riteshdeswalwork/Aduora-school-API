@@ -111,7 +111,7 @@ namespace sms.api.Controllers.Academic
         }
 
         [HttpGet("teacher")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Teacher")]
         public async Task<IActionResult> GetByTeacher([FromQuery] DateTime? fromDate, [FromQuery] DateTime? toDate)
         {
             var scope = await GetDataScopeAsync();
@@ -170,7 +170,7 @@ namespace sms.api.Controllers.Academic
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Teacher")]
         public async Task<IActionResult> Create([FromBody] CreateClassAttendanceDTO attendanceDto)
         {
             if (!ModelState.IsValid)
@@ -194,7 +194,7 @@ namespace sms.api.Controllers.Academic
         }
 
         [HttpPut("record/{recordId}")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Teacher")]
         public async Task<IActionResult> UpdateRecord(Guid recordId, [FromBody] UpdateAttendanceRecordDTO updateDto)
         {
             if (!ModelState.IsValid)

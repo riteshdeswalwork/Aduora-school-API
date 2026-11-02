@@ -18,7 +18,7 @@ namespace sms.api.Controllers.Academic
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Teacher")]
         public async Task<IActionResult> GetAllTimetableEntries([FromQuery] DateTime? scheduleDate = null, [FromQuery] DateTime? endDate = null)
         {
             try
@@ -68,7 +68,7 @@ namespace sms.api.Controllers.Academic
         }
 
         [HttpGet("teacher/{teacherId}")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Teacher")]
         public async Task<IActionResult> GetTimetableByTeacher(Guid teacherId, [FromQuery] int? dayOfWeek = null, [FromQuery] DateTime? scheduleDate = null, [FromQuery] DateTime? endDate = null)
         {
             try
