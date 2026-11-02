@@ -9,7 +9,6 @@ using sms.api.Utils;
 
 namespace sms.api.Controllers.Student
 {
-    [Authorize(Roles = "Admin,Staff")]
     [Route("api/co-curricular-participations")]
     public class CoCurricularParticipationController : ApiControllerBase
     {
@@ -23,6 +22,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin,Staff,Teacher,Principal")]
         public async Task<IActionResult> GetAll([FromQuery] Guid? academicYearId = null, [FromQuery] Guid? activityId = null, [FromQuery] string? searchTerm = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -44,6 +44,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet("paged")]
+        [Authorize(Roles = "Admin,Staff,Teacher,Principal")]
         public async Task<IActionResult> GetPaged([FromQuery] Guid? academicYearId = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? activityId = null, [FromQuery] string? searchTerm = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -65,6 +66,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,Staff,Teacher,Principal")]
         public async Task<IActionResult> GetById(Guid id)
         {
             var entity = await _context.CoCurricularParticipations.FindAsync(id);
@@ -72,6 +74,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Create([FromBody] CoCurricularParticipation entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -89,6 +92,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(Guid id, [FromBody] CoCurricularParticipation entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -102,6 +106,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var existing = await _context.CoCurricularParticipations.FindAsync(id);
