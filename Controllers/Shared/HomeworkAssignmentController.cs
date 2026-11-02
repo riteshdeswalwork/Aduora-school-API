@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
@@ -7,8 +8,15 @@ using sms.api.Utils;
 
 namespace sms.api.Controllers.Shared
 {
+    // NOTE: intentionally extends ApiControllerBase (no class-level role restriction) rather than
+    // ExtraModulesControllerBase ([Authorize(Roles = "Admin,Staff")]). ASP.NET Core combines a
+    // class-level [Authorize(Roles=...)] with any method-level [Authorize(Roles=...)] using AND
+    // semantics (the user must satisfy both role sets), so a derived class/action can only ever
+    // narrow the base's "Admin,Staff" - it can never add Parent/Teacher/etc. ApiControllerBase
+    // exposes the same GetCurrentAcademicYearId()/GetDataScopeAsync() helpers without that
+    // restriction, letting each action below declare its own correct role list.
     [Route("api/homework-assignments")]
-    public class HomeworkAssignmentController : ExtraModulesControllerBase
+    public class HomeworkAssignmentController : ApiControllerBase
     {
         private readonly ApplicationDbContext _context;
         private readonly IHomeworkAssignmentManager _manager;
@@ -20,6 +28,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin,Staff,Parent")]
         public async Task<IActionResult> GetAll([FromQuery] Guid? academicYearId = null, [FromQuery] string? searchTerm = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -49,6 +58,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpGet("paged")]
+        [Authorize(Roles = "Admin,Staff,Parent")]
         public async Task<IActionResult> GetPaged([FromQuery] Guid? academicYearId = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] string? tab = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -87,6 +97,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,Staff,Parent")]
         public async Task<IActionResult> GetById(Guid id)
         {
             var entity = await _context.HomeworkAssignments.FindAsync(id);
@@ -103,6 +114,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Create([FromBody] HomeworkAssignment entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -129,6 +141,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(Guid id, [FromBody] HomeworkAssignment entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -153,6 +166,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var existing = await _context.HomeworkAssignments.FindAsync(id);

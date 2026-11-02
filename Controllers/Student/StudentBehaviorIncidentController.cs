@@ -9,7 +9,6 @@ using sms.api.Utils;
 
 namespace sms.api.Controllers.Student
 {
-    [Authorize(Roles = "Admin,Staff")]
     [Route("api/student-behavior-incidents")]
     public class StudentBehaviorIncidentController : ApiControllerBase
     {
@@ -29,6 +28,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetAll([FromQuery] Guid? academicYearId = null, [FromQuery] Guid? studentId = null, [FromQuery] Guid? classId = null, [FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null, [FromQuery] int? severityIndex = null, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -60,6 +60,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet("paged")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetPaged([FromQuery] Guid? academicYearId = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] Guid? studentId = null, [FromQuery] Guid? classId = null, [FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null, [FromQuery] int? severityIndex = null, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -90,6 +91,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetById(Guid id)
         {
             var entity = await ApplyIncludes(_context.StudentBehaviorIncidents.AsNoTracking().Where(x => x.Id == id)).FirstOrDefaultAsync();
@@ -97,6 +99,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Create([FromBody] StudentBehaviorIncident entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -116,6 +119,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(Guid id, [FromBody] StudentBehaviorIncident entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -130,6 +134,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var existing = await _context.StudentBehaviorIncidents.FindAsync(id);

@@ -9,7 +9,6 @@ using sms.api.Utils;
 
 namespace sms.api.Controllers.Student
 {
-    [Authorize(Roles = "Admin,Staff")]
     [Route("api/discipline-incidents")]
     public class DisciplineIncidentController : ApiControllerBase
     {
@@ -23,6 +22,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetAll([FromQuery] Guid? academicYearId = null, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -45,6 +45,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet("paged")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetPaged([FromQuery] Guid? academicYearId = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -67,6 +68,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetById(Guid id)
         {
             var entity = await _context.DisciplineIncidents.FindAsync(id);
@@ -74,6 +76,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Create([FromBody] DisciplineIncident entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -92,6 +95,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(Guid id, [FromBody] DisciplineIncident entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -106,6 +110,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var existing = await _context.DisciplineIncidents.FindAsync(id);

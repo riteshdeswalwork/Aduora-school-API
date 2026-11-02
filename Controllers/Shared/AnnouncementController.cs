@@ -53,7 +53,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpGet("all")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Driver,Parent,Principal,Teacher")]
         public async Task<IActionResult> GetAllAnnouncements()
         {
             try
