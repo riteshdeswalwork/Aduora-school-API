@@ -44,7 +44,7 @@ namespace sms.api.Controllers.Admin
 
         // POST: api/designations
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,HR")]
         public async Task<ActionResult<DesignationDTO>> CreateDesignation(CreateDesignationDTO designationDto)
         {
             if (!ModelState.IsValid)

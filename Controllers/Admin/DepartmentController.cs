@@ -136,7 +136,7 @@ namespace sms.api.Controllers.Admin
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,HR")]
         public async Task<IActionResult> Create([FromBody] CreateDepartmentDTO createDTO)
         {
             if (!ModelState.IsValid)

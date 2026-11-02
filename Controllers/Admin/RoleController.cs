@@ -20,7 +20,7 @@ namespace sms.api.Controllers.Admin
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,HR,Receptionist")]
         public async Task<IActionResult> GetRoles([FromQuery] bool includeInactive = false)
         {
             try

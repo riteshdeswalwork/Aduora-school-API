@@ -11,7 +11,7 @@ using sms.api.Models.DTOs;
 namespace sms.api.Controllers.Staff
 {
     [Route("api/staff")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize]
     public class StaffController : ApiControllerBase
     {
         private readonly IStaffManager _staffManager;
@@ -24,7 +24,7 @@ namespace sms.api.Controllers.Staff
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Principal,Transport Manager,Accountant")]
         public async Task<IActionResult> GetAll([FromQuery] bool timetableTeachers = false)
         {
             var staffList = await _staffManager.GetAllAsync();
@@ -76,7 +76,7 @@ namespace sms.api.Controllers.Staff
         }
 
         [HttpGet("paged")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Principal,Transport Manager,Accountant")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null)
         {
             if (pageNumber < 1) pageNumber = 1;
@@ -136,6 +136,7 @@ namespace sms.api.Controllers.Staff
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetById(Guid id)
         {
             var staff = await _staffManager.GetByIdAsync(id);
@@ -234,6 +235,7 @@ namespace sms.api.Controllers.Staff
         }
 
         [HttpGet("{id}/courses")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> GetCourses(Guid id)
         {
             // If not admin, only allow access to own courses
@@ -245,7 +247,7 @@ namespace sms.api.Controllers.Staff
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,HR")]
         public async Task<IActionResult> Create([FromBody] CreateStaffDTO staffDto)
         {
             if (!ModelState.IsValid)
@@ -298,6 +300,7 @@ namespace sms.api.Controllers.Staff
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(Guid id, [FromBody] UpdateStaffDTO staffDto)
         {
             if (id != staffDto.Id)
