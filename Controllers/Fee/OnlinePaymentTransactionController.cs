@@ -23,7 +23,7 @@ namespace sms.api.Controllers.Fee
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Accountant,Principal")]
         public async Task<IActionResult> GetAll([FromQuery] Guid? academicYearId = null, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] string? settlementStatus = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -51,7 +51,7 @@ namespace sms.api.Controllers.Fee
         }
 
         [HttpGet("paged")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Accountant,Principal")]
         public async Task<IActionResult> GetPaged([FromQuery] Guid? academicYearId = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] string? settlementStatus = null, [FromQuery] bool includeInactive = false)
         {
             var yearId = academicYearId ?? GetCurrentAcademicYearId();
@@ -87,7 +87,7 @@ namespace sms.api.Controllers.Fee
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Accountant")]
         public async Task<IActionResult> Create([FromBody] OnlinePaymentTransaction entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);

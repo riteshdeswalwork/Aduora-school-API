@@ -19,7 +19,7 @@ namespace sms.api.Controllers.Fee
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Accountant")]
         public async Task<IActionResult> GetAll([FromQuery] Guid? academicYearId = null)
         {
             if (academicYearId.HasValue && academicYearId.Value != Guid.Empty)
@@ -32,7 +32,7 @@ namespace sms.api.Controllers.Fee
         }
 
         [HttpGet("{id}")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Accountant")]
         public async Task<IActionResult> GetById(Guid id)
         {
             var feeStructure = await _feeStructureManager.GetByIdAsync(id);
@@ -78,7 +78,7 @@ namespace sms.api.Controllers.Fee
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Accountant")]
         public async Task<IActionResult> Create([FromBody] FeeStructure feeStructure)
         {
             if (!ModelState.IsValid)

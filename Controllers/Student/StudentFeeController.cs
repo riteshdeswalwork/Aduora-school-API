@@ -100,7 +100,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet("paged")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Accountant,Principal")]
         public async Task<IActionResult> GetPaged(
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 20,
