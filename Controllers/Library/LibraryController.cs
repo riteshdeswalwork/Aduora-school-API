@@ -126,7 +126,7 @@ namespace sms.api.Controllers.Library
         }
 
         [HttpPost("members")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Librarian")]
         public async Task<IActionResult> CreateMember([FromBody] CreateLibraryMemberDTO createDto)
         {
             try
@@ -248,7 +248,7 @@ namespace sms.api.Controllers.Library
         }
 
         [HttpPost("fines")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Librarian")]
         public async Task<IActionResult> CreateFine([FromBody] CreateLibraryFineDTO createDto)
         {
             try

@@ -65,7 +65,7 @@ namespace sms.api.Controllers.Bus
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Transport Manager")]
         public async Task<IActionResult> CreateRoute([FromBody] CreateBusRouteDTO createDto)
         {
             try

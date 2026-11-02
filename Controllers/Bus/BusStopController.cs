@@ -81,7 +81,7 @@ namespace sms.api.Controllers.Bus
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Transport Manager")]
         public async Task<IActionResult> CreateStop([FromBody] CreateBusStopDTO createDto)
         {
             try

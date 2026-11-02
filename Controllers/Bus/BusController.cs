@@ -65,7 +65,7 @@ namespace sms.api.Controllers.Bus
         }
 
         [HttpPost]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Transport Manager")]
         public async Task<IActionResult> CreateBus([FromBody] CreateBusDTO createDto)
         {
             try
@@ -167,7 +167,7 @@ namespace sms.api.Controllers.Bus
         }
 
         [HttpGet("due-for-maintenance")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Transport Manager,Principal")]
         public async Task<IActionResult> GetBusesDueForMaintenance()
         {
             try
@@ -182,7 +182,7 @@ namespace sms.api.Controllers.Bus
         }
 
         [HttpGet("maintenance/paged")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Transport Manager,Principal")]
         public async Task<IActionResult> GetMaintenanceRecordsPaged(
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 20,
@@ -219,7 +219,7 @@ namespace sms.api.Controllers.Bus
         }
 
         [HttpGet("maintenance")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Transport Manager,Principal")]
         public async Task<IActionResult> GetAllMaintenanceRecords(
             [FromQuery] Guid? busId = null,
             [FromQuery] string? searchTerm = null,
@@ -237,7 +237,7 @@ namespace sms.api.Controllers.Bus
         }
 
         [HttpGet("maintenance/record/{id}")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Transport Manager,Principal")]
         public async Task<IActionResult> GetMaintenanceRecordById(Guid id)
         {
             try
@@ -266,7 +266,7 @@ namespace sms.api.Controllers.Bus
         }
 
         [HttpPost("maintenance")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Transport Manager")]
         public async Task<IActionResult> CreateMaintenanceRecord([FromBody] CreateBusMaintenanceDTO createDto)
         {
             try
