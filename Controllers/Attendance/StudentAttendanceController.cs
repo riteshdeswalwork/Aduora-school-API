@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +10,7 @@ using AttendanceEntity = sms.api.Models.Attendance;
 namespace sms.api.Controllers.Attendance
 {
     [Route("api/student-attendance")]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize]
     public class StudentAttendanceController : ApiControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -27,18 +28,32 @@ namespace sms.api.Controllers.Attendance
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin,Staff,Teacher,Student")]
         public async Task<IActionResult> Get([FromQuery] DateTime? date, [FromQuery] Guid? subjectId)
         {
-            var scope = await GetDataScopeAsync();
             var q = _context.Attendances.AsNoTracking();
             if (date.HasValue) q = q.Where(a => a.Date.Date == date.Value.Date);
             if (subjectId.HasValue && subjectId.Value != Guid.Empty) q = q.Where(a => a.CourseId == subjectId.Value);
 
-            if (!scope.IsUnrestricted)
+            if (User.IsInRole("Student"))
             {
-                var allowed = scope.AllowedStudentIds ?? Array.Empty<Guid>();
-                if (allowed.Count == 0) return Ok(Array.Empty<AttendanceEntity>());
-                q = q.Where(a => allowed.Contains(a.StudentId));
+                // OwnOnly roles resolve AllowedStudentIds to an empty list (it's meant for
+                // AssignedClasses scoping), so a student would otherwise always get zero rows.
+                // Force the filter to the caller's own student id instead.
+                var ownIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(ownIdClaim) || !Guid.TryParse(ownIdClaim, out var ownStudentId))
+                    return Forbid();
+                q = q.Where(a => a.StudentId == ownStudentId);
+            }
+            else
+            {
+                var scope = await GetDataScopeAsync();
+                if (!scope.IsUnrestricted)
+                {
+                    var allowed = scope.AllowedStudentIds ?? Array.Empty<Guid>();
+                    if (allowed.Count == 0) return Ok(Array.Empty<AttendanceEntity>());
+                    q = q.Where(a => allowed.Contains(a.StudentId));
+                }
             }
 
             var list = await q.OrderBy(a => a.Date).ThenBy(a => a.StudentId).ToListAsync();
@@ -62,6 +77,7 @@ namespace sms.api.Controllers.Attendance
         }
 
         [HttpPost("checkin")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CheckIn([FromBody] StudentCheckDto dto)
         {
             var scope = await GetDataScopeAsync();
@@ -101,6 +117,7 @@ namespace sms.api.Controllers.Attendance
         }
 
         [HttpPost("checkout")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> CheckOut([FromBody] StudentCheckDto dto)
         {
             var scope = await GetDataScopeAsync();

@@ -8,7 +8,7 @@ using sms.api.Models;
 namespace sms.api.Controllers.Attendance
 {
     [Route("api/staff-attendance")]
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     public class StaffAttendanceController : ApiControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -43,6 +43,7 @@ namespace sms.api.Controllers.Attendance
             string.Equals(status, "Late", StringComparison.OrdinalIgnoreCase);
 
         [HttpGet]
+        [Authorize(Roles = "Admin,Principal,HR")]
         public async Task<IActionResult> Get([FromQuery] DateTime? date)
         {
             var q = _context.StaffAttendances.AsNoTracking();
@@ -52,6 +53,7 @@ namespace sms.api.Controllers.Attendance
         }
 
         [HttpPost("bulk")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> SaveBulk([FromBody] List<StaffAttendanceRecordDto> records)
         {
             if (records == null || records.Count == 0) return BadRequest(new { message = "No records provided" });
@@ -107,6 +109,7 @@ namespace sms.api.Controllers.Attendance
         }
 
         [HttpPost("checkin")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CheckIn([FromBody] StaffCheckDto dto)
         {
             var yearId = GetCurrentAcademicYearId();
@@ -151,6 +154,7 @@ namespace sms.api.Controllers.Attendance
         }
 
         [HttpPost("checkout")]
+        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CheckOut([FromBody] StaffCheckDto dto)
         {
             var existing = await _context.StaffAttendances.FirstOrDefaultAsync(a => a.StaffId == dto.StaffId && a.Date.Date == dto.Date.Date);
