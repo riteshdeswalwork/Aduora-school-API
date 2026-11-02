@@ -8,7 +8,7 @@ namespace sms.api.Controllers.Staff
 {
     [Route("api/payroll")]
     [ApiController]
-    [Authorize(Roles = "Admin,Staff")]
+    [Authorize(Roles = "Admin,Staff,HR")]
     public class PayrollController : ControllerBase
     {
         private readonly IPayrollManager _payroll;
@@ -47,7 +47,7 @@ namespace sms.api.Controllers.Staff
         }
 
         [HttpPost("components")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,HR")]
         public async Task<IActionResult> CreateComponent([FromBody] PayrollComponentWriteDto dto)
         {
             try
@@ -62,7 +62,7 @@ namespace sms.api.Controllers.Staff
         }
 
         [HttpPut("components/{id:guid}")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,HR")]
         public async Task<IActionResult> UpdateComponent(Guid id, [FromBody] PayrollComponentWriteDto dto)
         {
             var c = await _payroll.UpdateComponentAsync(id, dto);
