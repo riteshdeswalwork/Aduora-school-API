@@ -10,7 +10,10 @@ using sms.api.Utils;
 
 namespace sms.api.Controllers.Student
 {
-    [Authorize(Roles = "Admin,Staff")]
+    // NOTE: No class-level [Authorize] here on purpose — each action below declares its own
+    // role list so GET can be broadened to Receptionist (front-desk work) while
+    // Create/Update/Approve/Delete stay restricted to Admin/Staff. A class-level attribute would
+    // STACK (AND) with any method-level one rather than being overridden by it.
     [Route("api/student-id-card-requests")]
     public class StudentIdCardRequestController : ApiControllerBase
     {
@@ -25,6 +28,7 @@ namespace sms.api.Controllers.Student
             _notify = notify;
         }
 
+        [Authorize(Roles = "Admin,Staff,Receptionist")]
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] Guid? academicYearId = null, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
         {
@@ -48,6 +52,7 @@ namespace sms.api.Controllers.Student
             return Ok(items);
         }
 
+        [Authorize(Roles = "Admin,Staff,Receptionist")]
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] Guid? academicYearId = null, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
         {
@@ -71,6 +76,7 @@ namespace sms.api.Controllers.Student
             return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
         }
 
+        [Authorize(Roles = "Admin,Staff,Receptionist")]
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
@@ -78,6 +84,7 @@ namespace sms.api.Controllers.Student
             return entity == null ? NotFound(new { message = "Student ID card request not found" }) : Ok(entity);
         }
 
+        [Authorize(Roles = "Admin,Staff")]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] StudentIdCardRequest entity)
         {
@@ -96,6 +103,7 @@ namespace sms.api.Controllers.Student
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
 
+        [Authorize(Roles = "Admin,Staff")]
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] StudentIdCardRequest entity)
         {
@@ -115,6 +123,7 @@ namespace sms.api.Controllers.Student
             return Ok(updated);
         }
 
+        [Authorize(Roles = "Admin,Staff")]
         [HttpPut("{id}/approve")]
         public async Task<IActionResult> Approve(Guid id)
         {
@@ -157,6 +166,7 @@ namespace sms.api.Controllers.Student
                 idempotencyKey: $"idcard.approved:{request.Id}");
         }
 
+        [Authorize(Roles = "Admin,Staff")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {

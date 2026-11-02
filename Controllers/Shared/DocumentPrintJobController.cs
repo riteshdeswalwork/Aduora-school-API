@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
@@ -7,8 +8,15 @@ using sms.api.Utils;
 
 namespace sms.api.Controllers.Shared
 {
+    // NOTE: Intentionally extends ApiControllerBase (not ExtraModulesControllerBase) so each
+    // action below can declare its own [Authorize(Roles=...)]. AuthorizeAttribute has
+    // AllowMultiple=true + Inherited=true, so an attribute added here would otherwise STACK
+    // (AND) with ExtraModulesControllerBase's class-level [Authorize(Roles="Admin,Staff")] and
+    // could never broaden access for Receptionist. ApiControllerBase exposes the same helper
+    // methods and has no Authorize attribute of its own, so there's no such conflict.
+    [ApiController]
     [Route("api/document-print-jobs")]
-    public class DocumentPrintJobController : ExtraModulesControllerBase
+    public class DocumentPrintJobController : ApiControllerBase
     {
         private readonly ApplicationDbContext _context;
         private readonly IDocumentPrintJobManager _manager;
@@ -19,6 +27,7 @@ namespace sms.api.Controllers.Shared
             _manager = manager;
         }
 
+        [Authorize(Roles = "Admin,Staff,Receptionist")]
         [HttpGet]
         public async Task<IActionResult> GetAll([FromQuery] string? searchTerm = null, [FromQuery] bool includeInactive = false)
         {
@@ -38,6 +47,7 @@ namespace sms.api.Controllers.Shared
             return Ok(items);
         }
 
+        [Authorize(Roles = "Admin,Staff,Receptionist")]
         [HttpGet("paged")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] bool includeInactive = false)
         {
@@ -58,6 +68,7 @@ namespace sms.api.Controllers.Shared
             return Ok(await query.ToPagedResultAsync(pageNumber, pageSize));
         }
 
+        [Authorize(Roles = "Admin,Staff,Receptionist")]
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
@@ -65,6 +76,7 @@ namespace sms.api.Controllers.Shared
             return entity == null ? NotFound(new { message = "Print job not found" }) : Ok(entity);
         }
 
+        [Authorize(Roles = "Admin,Staff,Receptionist")]
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] DocumentPrintJob entity)
         {
@@ -78,6 +90,7 @@ namespace sms.api.Controllers.Shared
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
         }
 
+        [Authorize(Roles = "Admin,Staff")]
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] DocumentPrintJob entity)
         {
@@ -92,6 +105,7 @@ namespace sms.api.Controllers.Shared
             var updated = await _manager.UpdateAsync(entity);
             return Ok(updated);
         }
+        [Authorize(Roles = "Admin,Staff")]
         [HttpPut("{id}/mark-printed")]
         public async Task<IActionResult> MarkPrinted(Guid id)
         {
@@ -105,6 +119,7 @@ namespace sms.api.Controllers.Shared
         }
 
 
+        [Authorize(Roles = "Admin,Staff")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
