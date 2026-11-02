@@ -43,7 +43,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Receptionist,Teacher,Principal,Librarian")]
         public async Task<IActionResult> GetAll()
         {
             var scope = await GetDataScopeAsync();
@@ -78,7 +78,7 @@ namespace sms.api.Controllers.Student
         }
 
         [HttpGet("paged")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Receptionist,Teacher,Principal,Librarian")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] Guid? academicYearId = null)
         {
             if (pageNumber < 1) pageNumber = 1;

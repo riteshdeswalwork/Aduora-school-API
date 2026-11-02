@@ -26,13 +26,13 @@ namespace sms.api.Controllers.Academic
         {
             IEnumerable<Subject> subjects;
 
-            // If user is Admin, return all subjects
-            if (User.IsInRole("Admin"))
+            // If user is Admin or Principal (Global scope), return all subjects
+            if (User.IsInRole("Admin") || User.IsInRole("Principal"))
             {
                 subjects = await _subjectManager.GetAllAsync();
             }
-            // If user is Staff, return only subjects assigned to them
-            else if (User.IsInRole("Staff"))
+            // If user is Staff or Teacher (AssignedClasses scope), return only subjects assigned to them
+            else if (User.IsInRole("Staff") || User.IsInRole("Teacher"))
             {
                 var staffIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 if (string.IsNullOrEmpty(staffIdClaim))

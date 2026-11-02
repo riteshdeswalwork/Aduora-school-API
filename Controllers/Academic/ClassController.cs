@@ -57,7 +57,7 @@ namespace sms.api.Controllers.Academic
 
         // GET: api/classes?academicYearId=
         [HttpGet]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Receptionist,Principal")]
         public async Task<ActionResult<IEnumerable<ClassDTO>>> GetClasses([FromQuery] Guid? academicYearId)
         {
             var yearId = academicYearId ?? GetAcademicYearIdFromHeader();
