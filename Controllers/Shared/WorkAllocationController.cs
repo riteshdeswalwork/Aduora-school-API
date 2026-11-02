@@ -1,14 +1,25 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using sms.api.Data;
 using sms.api.Interfaces.Shared;
 using sms.api.Models;
 using sms.api.Utils;
+using System.Security.Claims;
 
 namespace sms.api.Controllers.Shared
 {
+    // NOTE: Deliberately does NOT inherit ExtraModulesControllerBase. That base class carries a
+    // class-level [Authorize(Roles = "Admin,Staff")] shared by ~18 other controllers. Because
+    // ASP.NET Core combines class-level and method-level [Authorize(Roles=...)] with AND
+    // semantics (not OR), a method-level attribute can only ever narrow access below the
+    // inherited "Admin,Staff" set, never broaden it to roles like HR/Principal. Inheriting
+    // ControllerBase directly keeps this controller's auth independent and surgical, with no
+    // blast radius on the other 18 controllers that still rely on the shared base class.
     [Route("api/work-allocations")]
-    public class WorkAllocationController : ExtraModulesControllerBase
+    [ApiController]
+    [Authorize]
+    public class WorkAllocationController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
         private readonly IWorkAllocationManager _manager;
@@ -19,7 +30,21 @@ namespace sms.api.Controllers.Shared
             _manager = manager;
         }
 
+        private Guid GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier) ?? User.FindFirst("sub") ?? User.FindFirst("id");
+            if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                return userId;
+            }
+            throw new UnauthorizedAccessException("User ID not found in claims");
+        }
+
+        /// <summary>Global read access: Admin/Staff (existing) plus HR and Principal, who both
+        /// manage Work Allocation (HR: "Assign duties & tasks" quick action on HR dashboard;
+        /// Principal: Work Allocation "All Tasks" list - see issues #3/#4).</summary>
         [HttpGet]
+        [Authorize(Roles = "Admin,Staff,HR,Principal")]
         public async Task<IActionResult> GetAll([FromQuery] string? searchTerm = null, [FromQuery] bool includeInactive = false)
         {
             var query = _context.WorkAllocations.AsNoTracking().AsQueryable();
@@ -38,6 +63,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpGet("paged")]
+        [Authorize(Roles = "Admin,Staff,HR,Principal")]
         public async Task<IActionResult> GetPaged([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20, [FromQuery] string? searchTerm = null, [FromQuery] string? status = null, [FromQuery] Guid? assignedToStaffId = null, [FromQuery] Guid? assignedToUserId = null, [FromQuery] bool includeInactive = false)
         {
             var query = _context.WorkAllocations.AsNoTracking().AsQueryable();
@@ -65,13 +91,18 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpGet("{id}")]
+        [Authorize(Roles = "Admin,Staff,HR,Principal")]
         public async Task<IActionResult> GetById(Guid id)
         {
             var entity = await _context.WorkAllocations.FindAsync(id);
             return entity == null ? NotFound(new { message = "Work allocation not found" }) : Ok(entity);
         }
 
+        /// <summary>HR performs "Allocate Task" (create) from the HR dashboard's Work
+        /// Allocation quick action - see issue #3. Not broadened to Principal: no issue
+        /// evidences Principal creating tasks, only listing them (issue #4).</summary>
         [HttpPost]
+        [Authorize(Roles = "Admin,Staff,HR")]
         public async Task<IActionResult> Create([FromBody] WorkAllocation entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -86,6 +117,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Update(Guid id, [FromBody] WorkAllocation entity)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -101,6 +133,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpPut("{id}/complete")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Complete(Guid id)
         {
             var existing = await _manager.CompleteAsync(id);
@@ -110,6 +143,7 @@ namespace sms.api.Controllers.Shared
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin,Staff")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var existing = await _context.WorkAllocations.FindAsync(id);
