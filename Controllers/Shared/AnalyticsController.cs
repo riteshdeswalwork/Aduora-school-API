@@ -34,7 +34,7 @@ namespace sms.api.Controllers.Shared
         /// Get comprehensive dashboard analytics
         /// </summary>
         [HttpGet("dashboard")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetDashboardAnalytics()
         {
             try
@@ -53,7 +53,7 @@ namespace sms.api.Controllers.Shared
         /// Get student analytics
         /// </summary>
         [HttpGet("students")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetStudentAnalytics()
         {
             try
@@ -72,7 +72,7 @@ namespace sms.api.Controllers.Shared
         /// Get staff analytics
         /// </summary>
         [HttpGet("staff")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Principal")]
         public async Task<IActionResult> GetStaffAnalytics()
         {
             try
@@ -90,7 +90,7 @@ namespace sms.api.Controllers.Shared
         /// Get attendance analytics
         /// </summary>
         [HttpGet("attendance")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetAttendanceAnalytics()
         {
             try
@@ -109,7 +109,7 @@ namespace sms.api.Controllers.Shared
         /// Get fee analytics
         /// </summary>
         [HttpGet("fees")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetFeeAnalytics()
         {
             try
@@ -128,7 +128,7 @@ namespace sms.api.Controllers.Shared
         /// Get exam analytics
         /// </summary>
         [HttpGet("exams")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetExamAnalytics()
         {
             try
@@ -147,7 +147,7 @@ namespace sms.api.Controllers.Shared
         /// Get class analytics
         /// </summary>
         [HttpGet("classes")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetClassAnalytics()
         {
             try
@@ -166,7 +166,7 @@ namespace sms.api.Controllers.Shared
         /// Get department analytics
         /// </summary>
         [HttpGet("departments")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetDepartmentAnalytics()
         {
             try
@@ -184,7 +184,7 @@ namespace sms.api.Controllers.Shared
         /// Get quick stats for dashboard cards
         /// </summary>
         [HttpGet("quick-stats")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetQuickStats()
         {
             try
@@ -216,7 +216,7 @@ namespace sms.api.Controllers.Shared
         /// Get analytics summary for mobile/compact view
         /// </summary>
         [HttpGet("summary")]
-        [Authorize(Roles = "Admin,Staff")]
+        [Authorize(Roles = "Admin,Staff,Principal")]
         public async Task<IActionResult> GetAnalyticsSummary()
         {
             try
